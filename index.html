@@ -1,0 +1,1547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hierarchy Builder — Robot Ethology</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Theme tokens. Values are injected by applyTheme() from the THEMES table,
+   which is a direct port of engine/theme.py. Defaults here are "phosphor" so
+   the page is never unstyled during load.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --bg:#0a0c0a; --panel:#0d0f0d; --panel-deep:#080a08;
+  --border:#1e3a1e; --border-dim:#122212;
+  --phosphor:#33ff57; --phosphor-dim:#145a1e; --phosphor-mid:#1ea032;
+  --amber:#ff9500; --amber-dim:#502e00; --amber-dark:#281600;
+  --white-green:#dcffdc; --text:#a0dca0; --text-dim:#466e46;
+  --red-ph:#ff3c3c; --blue-ph:#3ca0ff;
+  --beh-cruise:#33c846; --beh-avoid:#ffb400;
+  --beh-seek:#3ce6e6; --beh-escape:#ff3c3c;
+  --font-body:"Courier New",Courier,monospace;
+  --radius:0px;
+  --scanline-alpha:0.11;
+}
+
+* { box-sizing:border-box; }
+
+html,body {
+  margin:0; padding:0; height:100%;
+  background:var(--bg); color:var(--text);
+  font-family:var(--font-body);
+  font-size:15px; line-height:1.45;
+}
+
+/* Scanline overlay — the SCANLINES flag from the theme table. Purely
+   decorative, so it is hidden from assistive tech and from print. */
+#scanlines {
+  position:fixed; inset:0; z-index:9999; pointer-events:none;
+  background:repeating-linear-gradient(
+    to bottom,
+    rgba(0,0,0,var(--scanline-alpha)) 0px,
+    rgba(0,0,0,var(--scanline-alpha)) 1px,
+    transparent 1px, transparent 2px);
+  opacity:0; transition:opacity .2s;
+}
+body[data-scanlines="true"] #scanlines { opacity:1; }
+
+/* ── Shell ───────────────────────────────────────────────────────────────── */
+
+.shell {
+  max-width:1400px; margin:0 auto; padding:14px 18px 28px;
+  display:flex; flex-direction:column; gap:14px; min-height:100%;
+}
+
+header.masthead {
+  display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;
+  padding-bottom:10px; border-bottom:1px solid var(--border);
+}
+.masthead h1 {
+  margin:0; font-size:1.45rem; font-weight:700; letter-spacing:.04em;
+  color:var(--phosphor); text-transform:uppercase;
+}
+.masthead .sub { color:var(--text-dim); font-size:.8rem; letter-spacing:.06em; }
+.masthead .spacer { flex:1 1 auto; }
+
+/* Theme picker — swatch buttons, one per palette. */
+.themes { display:flex; gap:6px; align-items:center; }
+.themes .lbl { color:var(--text-dim); font-size:.7rem; letter-spacing:.1em; margin-right:4px; }
+.swatch {
+  width:26px; height:26px; padding:0; cursor:pointer;
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:var(--radius); position:relative;
+}
+.swatch i {
+  position:absolute; inset:4px; display:block; border-radius:calc(var(--radius) / 2);
+}
+.swatch[aria-pressed="true"] { border-color:var(--phosphor); box-shadow:0 0 0 1px var(--phosphor); }
+.swatch:focus-visible { outline:2px solid var(--white-green); outline-offset:2px; }
+
+/* ── Workbench: pool | transfer | hierarchy ──────────────────────────────── */
+
+.workbench {
+  display:grid; gap:12px;
+  grid-template-columns:1fr auto 1fr;
+  align-items:start;
+}
+@media (max-width:820px) {
+  .workbench { grid-template-columns:1fr; }
+  .transfer { flex-direction:row !important; justify-content:center; }
+}
+
+.panel {
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:var(--radius); padding:10px;
+}
+.panel > h2 {
+  margin:0 0 8px; font-size:.72rem; letter-spacing:.14em; font-weight:700;
+  text-transform:uppercase; color:var(--phosphor);
+  display:flex; justify-content:space-between; align-items:center;
+}
+.panel > h2 .count { color:var(--text-dim); font-weight:400; letter-spacing:.06em; }
+
+ul.list { list-style:none; margin:0; padding:0; min-height:270px; }
+
+li.item {
+  display:flex; align-items:center; gap:9px;
+  padding:7px 9px; margin-bottom:4px; cursor:pointer;
+  background:var(--panel-deep); border:1px solid var(--border-dim);
+  border-radius:var(--radius); color:var(--text);
+  user-select:none;
+}
+li.item:hover { border-color:var(--phosphor-dim); color:var(--white-green); }
+li.item[aria-selected="true"] {
+  background:var(--phosphor-dim); border-color:var(--phosphor); color:var(--white-green);
+}
+li.item:focus-visible { outline:2px solid var(--white-green); outline-offset:1px; }
+
+/* Category chip — colour encodes the behaviour family, matching the
+   BEH_CRUISE / BEH_AVOID / BEH_SEEK / BEH_ESCAPE theme entries. */
+.chip { width:9px; height:9px; flex:0 0 auto; border-radius:50%; }
+.rank {
+  font-size:.72rem; color:var(--amber); min-width:1.4em; text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+.item .name { flex:1 1 auto; }
+.item .needs-light {
+  font-size:.62rem; letter-spacing:.08em; color:var(--amber);
+  border:1px solid var(--amber-dim); padding:0 4px; border-radius:var(--radius);
+}
+
+.empty {
+  padding:22px 10px; text-align:center; color:var(--text-dim);
+  font-size:.82rem; border:1px dashed var(--border-dim); border-radius:var(--radius);
+}
+
+.transfer { display:flex; flex-direction:column; gap:6px; padding-top:34px; }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+
+button.btn {
+  font-family:var(--font-body); font-size:.8rem; letter-spacing:.06em;
+  padding:7px 13px; cursor:pointer; color:var(--white-green);
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:var(--radius);
+}
+button.btn:hover:not(:disabled) { border-color:var(--phosphor); color:var(--phosphor); }
+button.btn:disabled { color:var(--text-dim); border-color:var(--border-dim); cursor:default; }
+button.btn:focus-visible { outline:2px solid var(--white-green); outline-offset:2px; }
+button.btn.accent {
+  background:var(--phosphor-dim); border-color:var(--phosphor); color:var(--white-green);
+}
+button.btn.accent:hover:not(:disabled) { background:var(--phosphor-mid); }
+button.btn.danger { color:var(--amber); border-color:var(--amber-dim); background:var(--amber-dark); }
+button.btn.danger:hover:not(:disabled) { border-color:var(--amber); }
+.transfer button.btn { min-width:44px; padding:7px 10px; }
+
+/* ── Action bar + status ─────────────────────────────────────────────────── */
+
+.actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.actions .spacer { flex:1 1 auto; }
+
+.status {
+  padding:7px 10px; font-size:.82rem;
+  border-left:3px solid var(--phosphor); background:var(--panel-deep);
+  color:var(--text);
+}
+.status[data-tone="warn"] { border-left-color:var(--amber); color:var(--amber); }
+
+/* ── Sketch preview ──────────────────────────────────────────────────────── */
+
+.preview { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); }
+.preview > h2 {
+  margin:0; padding:9px 12px; font-size:.72rem; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--phosphor);
+  border-bottom:1px solid var(--border-dim);
+  display:flex; justify-content:space-between; align-items:center; gap:10px;
+}
+.robot-pick, .display-pick { display:flex; gap:0; }
+.robot-pick button, .display-pick button {
+  font-family:var(--font-body); font-size:.72rem; letter-spacing:.06em;
+  padding:4px 11px; cursor:pointer; background:var(--panel-deep);
+  color:var(--text-dim); border:1px solid var(--border-dim);
+}
+.robot-pick button:first-child, .display-pick button:first-child {
+  border-radius:var(--radius) 0 0 var(--radius); }
+.robot-pick button:last-child, .display-pick button:last-child {
+  border-radius:0 var(--radius) var(--radius) 0; }
+.robot-pick button[aria-pressed="true"], .display-pick button[aria-pressed="true"] {
+  background:var(--amber-dark); color:var(--amber); border-color:var(--amber);
+}
+.robot-pick button:focus-visible, .display-pick button:focus-visible {
+  outline:2px solid var(--white-green); outline-offset:2px; }
+
+.pick-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.style-pick, .board-pick { display:flex; gap:0; }
+.style-pick button, .board-pick button {
+  font-family:var(--font-body); font-size:.66rem; letter-spacing:.08em;
+  text-transform:uppercase; padding:4px 10px; cursor:pointer;
+  background:var(--panel-deep); color:var(--text-dim);
+  border:1px solid var(--border-dim); border-radius:0;
+}
+.style-pick button:first-child, .board-pick button:first-child {
+  border-radius:var(--radius) 0 0 var(--radius); }
+.style-pick button:last-child, .board-pick button:last-child {
+  border-radius:0 var(--radius) var(--radius) 0; }
+.style-pick button[aria-pressed="true"], .board-pick button[aria-pressed="true"] {
+  background:var(--phosphor-dim); color:var(--white-green); border-color:var(--phosphor);
+}
+.style-pick button:focus-visible, .board-pick button:focus-visible {
+  outline:2px solid var(--white-green); outline-offset:2px; }
+
+.preview pre {
+  margin:0; padding:12px 14px; overflow-x:auto; max-height:400px;
+  font-family:var(--font-body); font-size:.8rem; line-height:1.5;
+  color:var(--text); white-space:pre;
+}
+.tok-cmt  { color:var(--text-dim); }
+.tok-key  { color:var(--phosphor); }
+.tok-fn   { color:var(--blue-ph); }
+.tok-warn { color:var(--amber); }
+
+footer.colophon {
+  color:var(--text-dim); font-size:.72rem; letter-spacing:.04em;
+  border-top:1px solid var(--border-dim); padding-top:10px;
+}
+
+@media (prefers-reduced-motion:reduce) {
+  * { transition:none !important; animation:none !important; }
+}
+</style>
+</head>
+<body data-scanlines="true">
+<div id="scanlines" aria-hidden="true"></div>
+
+<div class="shell">
+
+  <header class="masthead">
+    <h1>Hierarchy Builder</h1>
+    <span class="sub">Robot Ethology</span>
+    <span class="spacer"></span>
+    <div class="themes" role="group" aria-label="Robot">
+      <span class="lbl">ROBOT</span>
+      <span class="robot-pick" role="group" aria-label="Target robot"></span>
+    </div>
+    <div class="themes" role="group" aria-label="Display">
+      <span class="lbl">DISPLAY</span>
+      <span class="display-pick" role="group" aria-label="Display mode"></span>
+    </div>
+    <div class="themes" role="group" aria-label="Colour theme">
+      <span class="lbl">THEME</span>
+      <!-- swatch buttons injected by JS -->
+    </div>
+  </header>
+
+  <main class="workbench">
+    <section class="panel" aria-labelledby="pool-h">
+      <h2 id="pool-h">Behavior Pool <span class="count" id="pool-count"></span></h2>
+      <ul class="list" id="pool" role="listbox" aria-label="Available behaviors" tabindex="0"></ul>
+    </section>
+
+    <div class="transfer">
+      <button class="btn" id="btn-add"    title="Move to hierarchy">&rarr;</button>
+      <button class="btn" id="btn-remove" title="Return to pool">&larr;</button>
+      <button class="btn" id="btn-up"     title="Raise priority">&uarr;</button>
+      <button class="btn" id="btn-down"   title="Lower priority">&darr;</button>
+    </div>
+
+    <section class="panel" aria-labelledby="hier-h">
+      <h2 id="hier-h">Active Hierarchy <span class="count">highest priority first</span></h2>
+      <ul class="list" id="hier" role="listbox" aria-label="Active hierarchy" tabindex="0"></ul>
+    </section>
+  </main>
+
+  <div class="actions">
+    <button class="btn accent" id="btn-send">Send over Bluetooth</button>
+    <button class="btn" id="btn-download">Download sketch folder</button>
+    <button class="btn" id="btn-ble">BLE receiver sketch</button>
+    <button class="btn" id="btn-ino">Sketch only (.ino)</button>
+    <button class="btn" id="btn-copy">Copy code</button>
+    <span class="spacer"></span>
+    <button class="btn danger" id="btn-clear">Clear all</button>
+  </div>
+
+  <p class="status" id="status" role="status">Select behaviors and build your hierarchy.</p>
+
+  <section class="preview" aria-labelledby="prev-h">
+    <h2 id="prev-h">Generated sketch
+      <span class="pick-row">
+        <span class="board-pick" role="group" aria-label="Target board"></span>
+        <span class="style-pick" role="group" aria-label="Sketch style"></span>
+      </span>
+    </h2>
+    <pre id="code" aria-live="off"></pre>
+  </section>
+
+  <footer class="colophon">
+    PAW Robotics &middot; behavior wire names must match BEHAVIOR_NAMES in EthologyRobot.cpp
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THEMES — ported from engine/theme.py. Same four palettes, same key names.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const MONO = '"Courier New",Courier,monospace';
+const SANS = 'Helvetica,Arial,sans-serif';
+
+const THEMES = {
+  phosphor: { label:"PHOSPHOR", swatch:"#33ff57",
+    bg:"#0a0c0a", panel:"#0d0f0d", panelDeep:"#080a08",
+    border:"#1e3a1e", borderDim:"#122212",
+    phosphor:"#33ff57", phosphorDim:"#145a1e", phosphorMid:"#1ea032",
+    amber:"#ff9500", amberDim:"#502e00", amberDark:"#281600",
+    whiteGreen:"#dcffdc", text:"#a0dca0", textDim:"#466e46",
+    redPh:"#ff3c3c", bluePh:"#3ca0ff",
+    behCruise:"#33c846", behAvoid:"#ffb400", behSeek:"#3ce6e6", behEscape:"#ff3c3c",
+    font:MONO, radius:0, scanlines:true },
+
+  lcars: { label:"LCARS", swatch:"#ff9900",
+    bg:"#000000", panel:"#0a0810", panelDeep:"#040308",
+    border:"#503c8c", borderDim:"#281e46",
+    phosphor:"#ff9900", phosphorDim:"#784600", phosphorMid:"#cc6600",
+    amber:"#ffcc66", amberDim:"#50401e", amberDark:"#141008",
+    whiteGreen:"#ffefb3", text:"#cc99ff", textDim:"#503c78",
+    redPh:"#cc3333", bluePh:"#3399ff",
+    behCruise:"#ff9900", behAvoid:"#ffcc66", behSeek:"#33cccc", behEscape:"#cc3333",
+    font:SANS, radius:18, scanlines:false },
+
+  blueprint: { label:"BLUEPRINT", swatch:"#64a0f0",
+    bg:"#081234", panel:"#0c1a48", panelDeep:"#060e28",
+    border:"#5082dc", borderDim:"#284682",
+    phosphor:"#dcf0ff", phosphorDim:"#5078b4", phosphorMid:"#8cb4e6",
+    amber:"#ffdc50", amberDim:"#5a501c", amberDark:"#141206",
+    whiteGreen:"#f0f8ff", text:"#b4d2fa", textDim:"#506ea0",
+    redPh:"#ff5050", bluePh:"#64c8ff",
+    behCruise:"#64c8ff", behAvoid:"#ffdc50", behSeek:"#64ffdc", behEscape:"#ff5050",
+    font:MONO, radius:0, scanlines:false },
+
+  sixteenbit: { label:"16-BIT", swatch:"#44ccff",
+    bg:"#000010", panel:"#000828", panelDeep:"#000418",
+    border:"#4444cc", borderDim:"#1c1c58",
+    phosphor:"#44ccff", phosphorDim:"#145078", phosphorMid:"#288cc8",
+    amber:"#ffcc00", amberDim:"#645000", amberDark:"#181400",
+    whiteGreen:"#ffffff", text:"#ccdcff", textDim:"#505a8c",
+    redPh:"#ff2828", bluePh:"#2878ff",
+    behCruise:"#44ccff", behAvoid:"#ffcc00", behSeek:"#00ffa0", behEscape:"#ff2828",
+    font:MONO, radius:4, scanlines:false }
+};
+
+const THEME_KEY = "paw.hierarchyBuilder.theme";
+
+function applyTheme(name) {
+  const t = THEMES[name] || THEMES.phosphor;
+  const s = document.documentElement.style;
+  s.setProperty("--bg", t.bg);                     s.setProperty("--panel", t.panel);
+  s.setProperty("--panel-deep", t.panelDeep);      s.setProperty("--border", t.border);
+  s.setProperty("--border-dim", t.borderDim);      s.setProperty("--phosphor", t.phosphor);
+  s.setProperty("--phosphor-dim", t.phosphorDim);  s.setProperty("--phosphor-mid", t.phosphorMid);
+  s.setProperty("--amber", t.amber);               s.setProperty("--amber-dim", t.amberDim);
+  s.setProperty("--amber-dark", t.amberDark);      s.setProperty("--white-green", t.whiteGreen);
+  s.setProperty("--text", t.text);                 s.setProperty("--text-dim", t.textDim);
+  s.setProperty("--red-ph", t.redPh);              s.setProperty("--blue-ph", t.bluePh);
+  s.setProperty("--beh-cruise", t.behCruise);      s.setProperty("--beh-avoid", t.behAvoid);
+  s.setProperty("--beh-seek", t.behSeek);          s.setProperty("--beh-escape", t.behEscape);
+  s.setProperty("--font-body", t.font);
+  s.setProperty("--radius", t.radius + "px");
+  document.body.dataset.scanlines = String(t.scanlines);
+  try { localStorage.setItem(THEME_KEY, name); } catch (e) { /* private mode — ignore */ }
+  document.querySelectorAll(".swatch").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.theme === name)));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CODEGEN — ported from games/ethology/codegen.py.
+
+   Deliberate differences from the Python original:
+     1. The generated hierarchy() calls bot.readSensors() first. The Python
+        version omits it, so every guard reads uninitialised cached members
+        that are never refreshed.
+     2. A cruise behaviour only becomes a bare `else` when it is LAST. Anywhere
+        else it emits `if (true)` / `else if (true)`, which compiles and makes
+        the dead rungs below it observable. The Python version emits a bare
+        `else` at any position, producing `else` followed by `else if`.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+// (display label, wire name, needs a light source)
+const BEHAVIORS = [
+  ["Escape Front",    "escape_front",    false],
+  ["Escape Back",     "escape_back",     false],
+  ["Avoid Object",    "avoid_object",    false],
+  ["Approach Object", "approach_object", false],
+  ["Approach Light",  "approach_light",  true ],
+  ["Avoid Light",     "avoid_light",     true ],
+  ["Cruise Straight", "cruise_straight", false],
+  ["Cruise Arc",      "cruise_arc",      false]
+];
+
+const BEHAVIOR_MAP = Object.fromEntries(BEHAVIORS.map(b => [b[1], b]));
+
+// Pre-convention wire names still present in saved student work. Translated
+// on load, never written.
+const LEGACY_BEHAVIOR_ALIASES = {
+  seek_light:  "approach_light",
+  escape_rear: "escape_back"
+};
+const canonicalBehavior  = n  => LEGACY_BEHAVIOR_ALIASES[n] || n;
+const canonicalHierarchy = ns => ns.map(canonicalBehavior);
+
+// (guard, action) — exact EthologyRobot method names. Guard-then-action order
+// is load-bearing: the guards cache the readings their paired actions consume.
+const BEHAVIOR_CODE = {
+  escape_front:    ["collisionThreshold()",     "escapeFrontCollision()"],
+  escape_back:     ["backCollisionThreshold()", "escapeBackCollision()"],
+  avoid_object:    ["proximityThreshold()",     "avoidObject()"],
+  approach_object: ["proximityThreshold()",     "approachObject()"],
+  approach_light:  ["lightGradientThreshold()", "approachLight()"],
+  avoid_light:     ["lightGradientThreshold()", "avoidLight()"],
+  cruise_straight: ["true",                     "cruiseStraight()"],
+  cruise_arc:      ["true",                     "cruiseArc()"]
+};
+
+const CATEGORY_VAR = {
+  escape_front:"--beh-escape", escape_back:"--beh-escape",
+  avoid_object:"--beh-avoid",  avoid_light:"--beh-avoid",
+  approach_object:"--beh-seek", approach_light:"--beh-seek",
+  cruise_straight:"--beh-cruise", cruise_arc:"--beh-cruise"
+};
+
+// EthologyRobot::MAX_HIERARCHY. The pool holds exactly eight behaviors, so
+// this is unreachable today — it exists so a ninth behavior fails loudly.
+const MAX_HIERARCHY = 8;
+
+// cruise_arc flips a coin per tick via random(2). Arduino's random() repeats
+// the same sequence after every reset unless seeded, so an unseeded sketch
+// makes every robot arc identically on every power cycle.
+//
+// The BLE firmware seeds in tryInstallHierarchy() and notes why setup() is the
+// wrong place: micros() at power-on is near-identical every boot, and the wait
+// for a human to connect is what supplies the entropy. A downloaded sketch has
+// no such wait, so it reads a floating analog pin instead and mixes micros()
+// in on top.
+const needsSeed = h => h.includes("cruise_arc");
+
+const isCruise   = key => BEHAVIOR_CODE[key][0] === "true";
+const needsLight = h   => h.some(k => BEHAVIOR_MAP[k][2]);
+
+/* Hardware profiles — mirrors robots/hardware_profiles.json. */
+const HARDWARE_PROFILES = {
+  default: "giga_r1_wifi__prototype",
+  profiles: {
+    giga_r1_wifi__prototype: {
+      label: "Giga R1 WiFi — Prototype (bare Arduino)",
+      board: "giga_r1_wifi", shield: "prototype",
+      servo_init: "servo_h", pin_namespace: "gpio",
+      // Empty on purpose: CogServo.h includes <Servo.h> itself, so listing it
+      // here only duplicates the include in every generated sketch.
+      sketch_includes: [],
+      sketch_servo_decl: "", sketch_servo_begin: "",
+      sketch_robot_decl: "EthologyRobot bot;",
+      sketch_bot_begin: "bot.begin({left_pin}, {right_pin});",
+      // Must be left UNCONNECTED — read as entropy, see needsSeed() below.
+      // A0-A3 carry the proximity and light sensors.
+      sketch_seed_pin: "A5"
+    },
+    uno_r4_wifi__prototype: {
+      label: "Uno R4 WiFi — Prototype (bare Arduino)",
+      board: "uno_r4_wifi", shield: "prototype",
+      servo_init: "servo_h", pin_namespace: "gpio",
+      sketch_includes: [],
+      sketch_servo_decl: "", sketch_servo_begin: "",
+      sketch_robot_decl: "EthologyRobot bot;",
+      sketch_bot_begin: "bot.begin({left_pin}, {right_pin});",
+      sketch_seed_pin: "A5"
+    }
+  }
+};
+
+/* Motor pins — the only part of robot.json codegen actually consumes. */
+const ROBOT_CONFIG = {
+  hardware_profile: "giga_r1_wifi__prototype",
+  motor: { left_pin: "D6", right_pin: "D5" }
+};
+
+// How much the GIGA Display Shield shows. One setting, applied to BOTH the
+// generated hierarchy sketch and the BLE receiver — they each have their own
+// #define, and having to remember to edit one of them by hand is exactly how
+// a freshly flashed robot ends up with a blank screen.
+//
+//   off     no display code at all; compiles without the GFX library
+//   status  RUNNING / ADVERTISING / BAD HIERARCHY. The classroom setting.
+//   hud     adds the rung list, per-rung guard dots and raw sensor values
+const DISPLAY_MODES = { off:"Off", status:"Status", hud:"Full HUD" };
+let   displayMode = "off";
+const DISPLAY_KEY = "paw.hierarchyBuilder.display";
+
+const displayOn  = () => displayMode !== "off";
+const displayDev = () => displayMode === "hud";
+
+let activeProfile = ROBOT_CONFIG.hardware_profile;
+
+function currentProfile() {
+  return HARDWARE_PROFILES.profiles[activeProfile]
+      || HARDWARE_PROFILES.profiles[HARDWARE_PROFILES.default];
+}
+
+function pinToInt(pin) {
+  const s = String(pin).trim().toUpperCase();
+  return parseInt(s.startsWith("D") ? s.slice(1) : s, 10);
+}
+
+function fmt(tpl, vals) {
+  return String(tpl).replace(/\{(\w+)\}/g, (m, k) => (k in vals ? vals[k] : m));
+}
+
+function timestamp(d) {
+  const p = n => String(n).padStart(2, "0");
+  return {
+    stamp: `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_` +
+           `${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`,
+    human: `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ` +
+           `${p(d.getHours())}:${p(d.getMinutes())}`
+  };
+}
+
+/**
+ * Build the body of hierarchy(). Returns an array of source lines.
+ *
+ * Rung shape by position:
+ *   first, conditional      -> if (bot.guard())
+ *   later, conditional      -> else if (bot.guard())
+ *   cruise, last of several -> else
+ *   cruise, only behaviour  -> if (true)
+ *   cruise, anywhere else   -> if (true) / else if (true)
+ */
+function buildRungs(hierarchy) {
+  const lines = [];
+  hierarchy.forEach((key, i) => {
+    const [guard, action] = BEHAVIOR_CODE[key];
+    const label  = BEHAVIOR_MAP[key][0];
+    const first  = i === 0;
+    const last   = i === hierarchy.length - 1;
+    let head;
+
+    if (isCruise(key)) {
+      if (last && !first)      head = `else {`;
+      else if (first)          head = `if (true) {`;
+      else                     head = `else if (true) {`;
+    } else {
+      head = first ? `if (bot.${guard}) {` : `else if (bot.${guard}) {`;
+    }
+
+    let note = `  // ${label}`;
+    if (isCruise(key) && !last) note += "  — unreachable rungs follow";
+
+    lines.push(`  ${head}${note}`);
+    lines.push(`    bot.${action};`);
+    lines.push(`  }`);
+  });
+  return lines;
+}
+
+/** Preamble shared by both sketch styles: header comment, includes,
+ *  declarations and the body of setup() up to the hierarchy install. */
+function sketchParts(hierarchy, sketchName, profileKey) {
+  const key     = (profileKey || activeProfile);
+  const profile = HARDWARE_PROFILES.profiles[key]
+               || HARDWARE_PROFILES.profiles[HARDWARE_PROFILES.default];
+
+  const leftInt  = pinToInt(ROBOT_CONFIG.motor.left_pin);
+  const rightInt = pinToInt(ROBOT_CONFIG.motor.right_pin);
+  const pins     = { left_pin: leftInt, right_pin: rightInt };
+
+  const robotClass = "EthologyRobot";
+  const robotHdr   = "EthologyRobot.h";
+
+  // Project headers are always included; sketch_includes adds any board
+  // library the profile needs on top. CogServo.h pulls in <Servo.h>.
+  const includes = [
+    ...(profile.sketch_includes || []).map(inc => `#include ${inc}`),
+    `#include "CogServo.h"`,
+    `#include "${robotHdr}"`,
+    displayOn() ? `#include "PAWConfig.h"` : null,
+    displayOn() ? `#include "CogDisplay.h"` : null
+  ].filter(Boolean).join("\n");
+
+  // NOT a #define here. The display switches live in PAWConfig.h, which both
+  // this sketch and CogDisplay.cpp include, so the two agree. Defining them in
+  // the .ino reaches only the .ino, and the link then fails with
+  // "undefined reference to CogDisplay::setGuards".
+  const displaySwitch = displayOn()
+    ? `// Display settings are in PAWConfig.h — edit them there, not here.\n`
+    : "";
+  const servoDecl  = profile.sketch_servo_decl  ?? "CogServo driveServos;";
+  const servoBegin = fmt(profile.sketch_servo_begin ?? "", pins);
+  const botDecl    = fmt(profile.sketch_robot_decl || "{robot_class} bot;",
+                         { robot_class: robotClass });
+  const botBegin   = fmt(profile.sketch_bot_begin ||
+                         "bot.begin({left_pin}, {right_pin});", pins);
+
+  const { human } = timestamp(new Date());
+  const listing = hierarchy
+    .map((k, i) => `    ${i+1}. ${BEHAVIOR_MAP[k][0]}`).join("\n");
+
+  return {
+    includes,
+    decls: [servoDecl, botDecl,
+            displayOn() ? "CogDisplay display;" : null
+           ].filter(Boolean).join("\n"),
+    display: displayOn(),
+    setupBody: [
+      "  Serial.begin(9600);",
+      displayOn() ? "  display.begin();" : null,
+      servoBegin ? `  ${servoBegin}` : null,
+      `  ${botBegin}`,
+      needsSeed(hierarchy) ? "" : null,
+      needsSeed(hierarchy)
+        ? "  // Cruise Arc flips a coin each tick. Without a seed, random()\n" +
+          "  // repeats the same sequence after every reset, so every robot\n" +
+          `  // would arc identically. ${profile.sketch_seed_pin || "A5"} must be left UNCONNECTED —\n` +
+          "  // a floating analog input is the entropy source.\n" +
+          `  randomSeed(analogRead(${profile.sketch_seed_pin || "A5"}) ^ micros());`
+        : null
+    ].filter(v => v !== null).join("\n"),
+    displaySwitch,
+    header:
+`/*
+  ${sketchName}
+  Generated by PAW Hierarchy Builder — ${human}
+  Board/shield: ${profile.label || key}
+
+  Hierarchy (highest priority first):
+${listing}
+*/
+`
+  };
+}
+
+/**
+ * Unrolled form — every rung written out as if/else. This is the "teach the
+ * code" artifact: it duplicates what _runRung() does so students can read the
+ * arbitration instead of trusting it. Because the guards only read values
+ * cached by readSensors(), the sketch must call it itself.
+ */
+function generateSketchUnrolled(hierarchy, sketchName, profileKey) {
+  const p     = sketchParts(hierarchy, sketchName, profileKey);
+  const rungs = buildRungs(hierarchy).join("\n");
+
+  // No hierarchy is installed in this style — the rungs are written out and
+  // bot.hierarchy() is never called, so lastFiredIndex() would always be -1
+  // and guardMet() would describe rungs the robot is not arbitrating. The
+  // panel therefore shows status only here, whatever PAW_DISPLAY_DEV says.
+  const setupTail = p.display ? "\n\n  display.setStatus(\"RUNNING\");" : "";
+  const loopTail  = p.display ? "\n  display.updateStatus();" : "";
+
+  return (
+`${p.header}
+${p.displaySwitch}${p.includes}
+
+${p.decls}
+
+void hierarchy() {
+  // Sense first. readSensors() halts the motors and samples every sensor
+  // once, so every guard and every behaviour below sees the same reading.
+  // The guards read cached values only — without this they never update.
+  bot.readSensors();
+
+${rungs}
+}
+
+void setup() {
+${p.setupBody}${setupTail}
+}
+
+void loop() {
+  hierarchy();${loopTail}
+}
+`);
+}
+
+/**
+ * Hierarchy-object form — the default.
+ *
+ * EthologyRobot owns arbitration: setHierarchy() parses wire names against
+ * BEHAVIOR_NAMES, and hierarchy() calls readSensors() then walks the rungs via
+ * _runRung(), which holds every guard/action pairing. The sketch supplies the
+ * ordering and nothing else, so it cannot drift from the firmware — and it is
+ * the same path the robot takes when a hierarchy arrives over BLE.
+ */
+function generateSketchHierarchy(hierarchy, sketchName, profileKey) {
+  const p = sketchParts(hierarchy, sketchName, profileKey);
+
+  const width = Math.max(...hierarchy.map(k => k.length)) + 3;
+  const table = hierarchy.map((k, i) => {
+    const q = `"${k}"` + (i < hierarchy.length - 1 ? "," : " ");
+    return `  ${q.padEnd(width + 2)}// ${i + 1}. ${BEHAVIOR_MAP[k][0]}`;
+  }).join("\n");
+
+  return (
+`${p.header}
+${p.displaySwitch}${p.includes}
+
+${p.decls}
+
+// The hierarchy, highest priority first. EthologyRobot::setHierarchy() parses
+// these wire names; hierarchy() samples the sensors once per tick and runs the
+// first behavior whose condition is met. A cruise behavior always fires, so
+// anything listed below one can never run.
+const char* const HIERARCHY[] = {
+${table}
+};
+const int HIERARCHY_LEN = sizeof(HIERARCHY) / sizeof(HIERARCHY[0]);
+
+void setup() {
+${p.setupBody}
+
+${installBlock(p)}
+}
+
+void loop() {
+  bot.hierarchy();
+${displayTick(p)}
+}
+`);
+}
+
+/** setHierarchy() plus, on a display board, the status reporting. */
+function installBlock(parts) {
+  if (!parts.display) {
+    return (
+`  int bad = bot.setHierarchy(HIERARCHY, HIERARCHY_LEN);
+  if (bad != EthologyRobot::HIERARCHY_OK) {
+    Serial.print("Unrecognised behavior at index ");
+    Serial.println(bad);
+  }`);
+  }
+  return (
+`  int bad = bot.setHierarchy(HIERARCHY, HIERARCHY_LEN);
+  if (bad != EthologyRobot::HIERARCHY_OK) {
+    Serial.print("Unrecognised behavior at index ");
+    Serial.println(bad);
+    // Say so on the panel too. A robot that silently does nothing is the
+    // single most common thing to lose time to.
+    display.setStatus("BAD HIERARCHY");
+    return;
+  }
+
+  display.setHierarchy(HIERARCHY, HIERARCHY_LEN);
+  display.setStatus("RUNNING");`);
+}
+
+/** The per-tick display feed. Empty on a board without a panel. */
+function displayTick(parts) {
+  if (!parts.display) return "";
+  return (
+`
+  // Feed the panel. With PAW_DISPLAY_DEV 0 everything except updateStatus()
+  // compiles to nothing, so these calls cost a classroom build nothing.
+  bool guards[CogDisplay::MAX_ROWS];
+  for (int i = 0; i < HIERARCHY_LEN; i++) {
+    guards[i] = bot.guardMet(bot.behaviorAt(i));
+  }
+  display.setGuards(guards, HIERARCHY_LEN);
+  display.setActive(bot.lastFiredIndex());
+
+  const EthologyRobot::SensorSnapshot s = bot.snapshot();
+  display.setSensors(s.leftProx, s.rightProx, s.lightGradient,
+                     s.leftFrontBump, s.rightFrontBump,
+                     s.leftBackBump,  s.rightBackBump);
+  display.update();
+  display.updateStatus();
+
+  // Type 'v' in the Serial Monitor to toggle the HUD without recompiling.
+  // Only does anything when PAW_DISPLAY_DEV is 1 — a classroom build has no
+  // HUD in the binary to reveal.
+  while (Serial.available()) {
+    if (Serial.read() == 'v') display.toggleVerbose();
+  }`);
+}
+
+const SKETCH_STYLES = {
+  hierarchy: { label:"Hierarchy object", fn:generateSketchHierarchy,
+               hint:"The robot arbitrates. Matches the BLE path." },
+  unrolled:  { label:"Unrolled if/else", fn:generateSketchUnrolled,
+               hint:"Every rung written out. For reading in a debrief." }
+};
+
+let sketchStyle = "hierarchy";
+
+function generateSketch(hierarchy, sketchName, profileKey) {
+  return (SKETCH_STYLES[sketchStyle] || SKETCH_STYLES.hierarchy)
+           .fn(hierarchy, sketchName, profileKey);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SKETCH FOLDER
+
+   A bare .ino will not compile: it includes EthologyRobot.h and CogServo.h,
+   which are project files, not installed libraries. The Arduino IDE compiles
+   every .cpp and .h sitting beside the .ino, so the download is a folder —
+   delivered as a ZIP — containing the sketch plus its firmware sources.
+
+   The sources are fetched from this site's own firmware/ethology/ directory
+   rather than embedded here, so the repository copy stays authoritative and
+   the page always ships whatever firmware is currently committed.
+
+   This is exactly the dependency set of firmware/ethology_standalone: the
+   shared classes minus CogPotentialField and CogVisLight, which nothing in
+   the include graph reaches from EthologyRobot.h.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const FIRMWARE_DIR = "firmware/ethology/";
+const DISPLAY_DIR  = "firmware/display/";
+const BLE_DIR      = "firmware/ble/";
+
+// Files that make up the BLE receiver sketch — scaffolding with no hierarchy
+// baked in. Flash one per robot, then send hierarchies to it from here.
+const BLE_EXTRA_FILES = ["CogBluetooth.h", "CogBluetooth.cpp"];
+const BLE_INO         = "ethology_ble_robot.ino";
+
+// Which robot we are talking to. The same choice names the board when you
+// download a receiver sketch AND filters the scan when you send — a mismatch
+// between those two is the whole reason this is one setting and not two.
+const ROBOT_IDS = ["A", "B", "C", "D"];
+let   activeRobot = "A";
+const ROBOT_KEY = "paw.hierarchyBuilder.robot";
+const robotName = () => `Robot${activeRobot}`;
+
+// From CogBluetooth.h. These must stay identical to the firmware's, and to
+// RobotBLEClient in engine/bluetooth/robot_bt_client.py.
+const BLE_SERVICE_UUID = "19b20000-e8f2-537e-4f6c-d104768a1214";
+const BLE_CMD_UUID     = "19b20001-e8f2-537e-4f6c-d104768a1214";
+const BLE_DATA_UUID    = "19b20002-e8f2-537e-4f6c-d104768a1214";
+const FIRMWARE_FILES = [
+  "EthologyRobot.h", "EthologyRobot.cpp",
+  "Robot.h",         "Robot.cpp",
+  "CogServo.h",      "CogServo.cpp",
+  "CogAnaDigi.h",    "CogAnaDigi.cpp",
+  "CogProximity.h",  "CogProximity.cpp",
+  "CogLight.h",      "CogLight.cpp",
+  "CogCollision.h",  "CogCollision.cpp"
+];
+
+async function fetchFirmware() {
+  // The base set is the dependency closure of EthologyRobot.h. A profile may
+  // add files from elsewhere — the display board pulls in CogDisplay, which
+  // is deliberately NOT in the base set: it would make every download depend
+  // on Arduino_GigaDisplay_GFX.
+  const jobs = FIRMWARE_FILES.map(name => ({ dir:FIRMWARE_DIR, name }))
+    .concat(displayOn()
+      ? ["PAWConfig.h", "CogDisplay.h", "CogDisplay.cpp"]
+          .map(name => ({ dir:DISPLAY_DIR, name }))
+      : []);
+
+  return Promise.all(jobs.map(async ({ dir, name }) => {
+    const res = await fetch(dir + name, { cache:"no-cache" });
+    if (!res.ok) throw new Error(`${name} — ${res.status}`);
+    return { name, data:new Uint8Array(await res.arrayBuffer()) };
+  }));
+}
+
+/* ── Minimal ZIP writer, STORE method only ───────────────────────────────────
+   No compression, so no dependency and no build step. Source files are small
+   enough that the size difference does not matter. */
+
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function dosDateTime(d) {
+  return {
+    time: (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1),
+    date: ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()
+  };
+}
+
+function zipStore(entries) {
+  const enc    = new TextEncoder();
+  const chunks = [];
+  const central = [];
+  const { time, date } = dosDateTime(new Date());
+  let offset = 0;
+
+  const u16 = v => { const b = new Uint8Array(2); new DataView(b.buffer).setUint16(0, v, true); return b; };
+  const u32 = v => { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, v, true); return b; };
+
+  for (const e of entries) {
+    const name = enc.encode(e.name);
+    const crc  = crc32(e.data);
+    const size = e.data.length;
+
+    // Local file header. Flag 0x0800 marks the name as UTF-8.
+    const local = [u32(0x04034b50), u16(20), u16(0x0800), u16(0),
+                   u16(time), u16(date), u32(crc), u32(size), u32(size),
+                   u16(name.length), u16(0), name, e.data];
+    chunks.push(...local);
+
+    central.push(u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(0),
+                 u16(time), u16(date), u32(crc), u32(size), u32(size),
+                 u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0),
+                 u32(offset), name);
+
+    offset += local.reduce((n, c) => n + c.length, 0);
+  }
+
+  const centralSize = central.reduce((n, c) => n + c.length, 0);
+  const end = [u32(0x06054b50), u16(0), u16(0),
+               u16(entries.length), u16(entries.length),
+               u32(centralSize), u32(offset), u16(0)];
+
+  return new Blob([...chunks, ...central, ...end], { type:"application/zip" });
+}
+
+/**
+ * Assemble the BLE receiver sketch folder.
+ *
+ * No hierarchy is baked in: this is the scaffolding that brings up
+ * EthologyRobot and CogBluetooth and then waits. Flash it once per robot, and
+ * from then on hierarchies arrive over the air.
+ *
+ * The only thing that varies per robot is PAW_ROBOT_ID, which becomes the
+ * advertising name. The firmware's own comment records why that matters:
+ * every board flashed from an unedited copy came up as RobotA, so RobotB was
+ * unreachable and two powered robots collided. Setting it here from the same
+ * picker that filters the scan means the two cannot disagree.
+ */
+async function buildBleZip(stem, robotId) {
+  const enc  = new TextEncoder();
+  const dec  = new TextDecoder();
+
+  const jobs = [...FIRMWARE_FILES.map(name => ({ dir:FIRMWARE_DIR, name })),
+                ...BLE_EXTRA_FILES.map(name => ({ dir:BLE_DIR,      name })),
+                // PAWConfig.h always: the receiver reads PAW_ROBOT_ID from it.
+                { dir:BLE_DIR, name:"PAWConfig.h" },
+                ...(displayOn()
+                     ? ["CogDisplay.h", "CogDisplay.cpp"].map(name => ({ dir:DISPLAY_DIR, name }))
+                     : []),
+                { dir:BLE_DIR, name:BLE_INO }];
+
+  const files = await Promise.all(jobs.map(async ({ dir, name }) => {
+    const res = await fetch(dir + name, { cache:"no-cache" });
+    if (!res.ok) throw new Error(`${name} — ${res.status}`);
+    return { name, data:new Uint8Array(await res.arrayBuffer()) };
+  }));
+
+  const entries = files.map(f => {
+    // The settings live in PAWConfig.h, and stamping them there rather than in
+    // the .ino is load-bearing: CogDisplay.cpp is a separate translation unit
+    // and only sees values that come from a header it also includes. A #define
+    // in the .ino reaches the .ino alone, and the link fails with
+    // "undefined reference to CogDisplay::setGuards".
+    if (f.name === "PAWConfig.h") {
+      const cfg = dec.decode(f.data)
+        .replace(/#define PAW_ROBOT_ID .*/,
+                 `#define PAW_ROBOT_ID ${robotId}`)
+        .replace(/#define PAW_USE_DISPLAY .*/,
+                 `#define PAW_USE_DISPLAY ${displayOn() ? 1 : 0}`)
+        .replace(/#define PAW_DISPLAY_DEV .*/,
+                 `#define PAW_DISPLAY_DEV ${displayDev() ? 1 : 0}`);
+      return { name:`${stem}/PAWConfig.h`, data:enc.encode(cfg) };
+    }
+    if (f.name !== BLE_INO) return { name:`${stem}/${f.name}`, data:f.data };
+
+    // Stamp the robot id into the sketch's own #define rather than appending
+    // a second one, so the file still reads as a single source of truth.
+    return { name:`${stem}/${stem}.ino`, data:f.data };
+  });
+
+  return zipStore(entries);
+}
+
+/**
+ * Assemble the sketch folder. Arduino requires the .ino basename to match its
+ * folder name, so both come from the same stem.
+ */
+async function buildSketchZip(hierarchy, stem) {
+  const enc      = new TextEncoder();
+  const firmware = await fetchFirmware();
+  const entries  = [
+    { name:`${stem}/${stem}.ino`, data:enc.encode(generateSketch(hierarchy, `${stem}.ino`)) },
+    ...firmware.map(f => ({ name:`${stem}/${f.name}`, data:f.data }))
+  ];
+  return zipStore(entries);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SEND OVER BLE
+
+   Web Bluetooth, talking the protocol documented in CogBluetooth.h. Chromium
+   only (no Safari, no Firefox) and HTTPS or localhost only. The download path
+   stays the universal fallback.
+
+   The handshake is deliberately two-sided: writing {"cmd":"run"} only STAGES
+   the names. The robot validates them against EthologyRobot's own vocabulary
+   and answers on the DATA characteristic with running / error. So we wait for
+   that notification rather than assuming a successful write means success.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const bleSupported = () => typeof navigator !== "undefined" && !!navigator.bluetooth;
+
+async function sendOverBle(hierarchy, onStatus) {
+  if (!bleSupported()) {
+    throw new Error("This browser has no Web Bluetooth. Chrome or Edge, over https or localhost.");
+  }
+
+  onStatus(`Looking for ${robotName()}…`);
+  const device = await navigator.bluetooth.requestDevice({
+    filters: [{ name: robotName() }],
+    optionalServices: [BLE_SERVICE_UUID]
+  });
+
+  onStatus(`Connecting to ${device.name || robotName()}…`);
+  const server  = await device.gatt.connect();
+  const service = await server.getPrimaryService(BLE_SERVICE_UUID);
+  const cmdCh   = await service.getCharacteristic(BLE_CMD_UUID);
+  const dataCh  = await service.getCharacteristic(BLE_DATA_UUID);
+
+  // Subscribe BEFORE writing, or the reply can land before we are listening.
+  const reply = new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("No reply within 10 s — the robot may already be running a hierarchy.")),
+      10000);
+
+    dataCh.addEventListener("characteristicvaluechanged", ev => {
+      let msg;
+      try {
+        msg = JSON.parse(new TextDecoder().decode(ev.target.value));
+      } catch (e) {
+        return;   // not a frame we understand; keep waiting
+      }
+      // Ignore the idle frame the robot notifies on connect.
+      if (msg.status === "idle") return;
+      clearTimeout(timer);
+      resolve(msg);
+    });
+  });
+
+  await dataCh.startNotifications();
+
+  onStatus("Sending hierarchy…");
+  const payload = JSON.stringify({ cmd:"run", hierarchy });
+  await cmdCh.writeValue(new TextEncoder().encode(payload));
+
+  const msg = await reply;
+  try { device.gatt.disconnect(); } catch (e) { /* already gone */ }
+
+  if (msg.status === "running") return { session: msg.session };
+  if (msg.status === "busy") {
+    throw new Error(`${robotName()} is already running session ${msg.session}. ` +
+                    "A run is one-way by design — power-cycle it to send another.");
+  }
+  throw new Error(msg.error || "The robot rejected the hierarchy.");
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   UI
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const state = {
+  pool: BEHAVIORS.map(b => b[1]),
+  hierarchy: [],
+  poolSel: -1,
+  hierSel: -1
+};
+
+const $ = id => document.getElementById(id);
+const els = {
+  pool:$("pool"), hier:$("hier"), poolCount:$("pool-count"),
+  code:$("code"), status:$("status"),
+  add:$("btn-add"), remove:$("btn-remove"), up:$("btn-up"), down:$("btn-down"),
+  clear:$("btn-clear"), download:$("btn-download"),
+  ino:$("btn-ino"), copy:$("btn-copy"),
+  send:$("btn-send"), ble:$("btn-ble")
+};
+
+function setStatus(msg, tone) {
+  els.status.textContent = msg;
+  els.status.dataset.tone = tone || "ok";
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" }[c]));
+}
+
+function renderList(ul, keys, selIdx, numbered) {
+  ul.innerHTML = "";
+  if (!keys.length) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = numbered
+      ? "No behaviors yet. Select one from the pool and press →."
+      : "Every behavior is in the hierarchy.";
+    ul.appendChild(li);
+    return;
+  }
+  keys.forEach((key, i) => {
+    const [label, , light] = BEHAVIOR_MAP[key];
+    const li = document.createElement("li");
+    li.className = "item";
+    li.tabIndex = 0;
+    li.setAttribute("role", "option");
+    li.setAttribute("aria-selected", String(i === selIdx));
+    li.dataset.index = String(i);
+
+    if (numbered) {
+      const r = document.createElement("span");
+      r.className = "rank"; r.textContent = String(i + 1);
+      li.appendChild(r);
+    }
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.style.background = `var(${CATEGORY_VAR[key]})`;
+    li.appendChild(chip);
+
+    const nm = document.createElement("span");
+    nm.className = "name"; nm.textContent = label;
+    li.appendChild(nm);
+
+    if (light) {
+      const tag = document.createElement("span");
+      tag.className = "needs-light"; tag.textContent = "LIGHT";
+      tag.title = "Requires a light source in the arena";
+      li.appendChild(tag);
+    }
+
+    const pick = () => {
+      if (numbered) { state.hierSel = i; state.poolSel = -1; }
+      else          { state.poolSel = i; state.hierSel = -1; }
+      render();
+    };
+    li.addEventListener("click", pick);
+    li.addEventListener("dblclick", () => { pick(); numbered ? removeSel() : addSel(); });
+    li.addEventListener("keydown", ev => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault(); pick(); numbered ? removeSel() : addSel();
+      }
+    });
+    ul.appendChild(li);
+  });
+}
+
+/* Light syntax colouring for the preview. Comments first, then keywords and
+   the bot.* calls, on the already-escaped text. */
+function highlight(src) {
+  return escapeHtml(src)
+    .split("\n")
+    .map(line => {
+      const cut = line.indexOf("//");
+      let code = cut >= 0 ? line.slice(0, cut) : line;
+      let cmt  = cut >= 0 ? line.slice(cut)    : "";
+      code = code
+        .replace(/\b(if|else|void|true|const|int)\b/g, '<span class="tok-key">$1</span>')
+        .replace(/\bbot\.(\w+)/g, 'bot.<span class="tok-fn">$1</span>');
+      if (cmt) {
+        const cls = /unreachable/.test(cmt) ? "tok-warn" : "tok-cmt";
+        cmt = `<span class="${cls}">${cmt}</span>`;
+      }
+      return code + cmt;
+    })
+    .join("\n");
+}
+
+function currentName() {
+  return `hierarchy_${timestamp(new Date()).stamp}.ino`;
+}
+
+function validate() {
+  const h = state.hierarchy;
+  if (!h.length) return { tone:"ok", msg:"Select behaviors and build your hierarchy." };
+
+  const cruiseAt = h.findIndex(isCruise);
+  const last = h.length - 1;
+
+  if (cruiseAt === -1) {
+    return { tone:"warn",
+      msg:"No cruise behavior. With every guard failing, the robot stops and stays stopped." };
+  }
+  if (cruiseAt !== last) {
+    const dead = last - cruiseAt;
+    return { tone:"warn",
+      msg:`${BEHAVIOR_MAP[h[cruiseAt]][0]} is at position ${cruiseAt + 1} of ${h.length}. ` +
+          `A cruise behavior always fires, so the ${dead} behavior` +
+          `${dead === 1 ? "" : "s"} below it can never run.` };
+  }
+  if (h.length > MAX_HIERARCHY) {
+    return { tone:"warn",
+      msg:`${h.length} behaviors — the robot accepts at most ${MAX_HIERARCHY}. ` +
+          `setHierarchy() will reject this hierarchy whole.` };
+  }
+  if (displayMode === "hud" && sketchStyle === "unrolled") {
+    return { tone:"warn",
+      msg:"Unrolled style writes the rungs out instead of installing them, so " +
+          "the display can only show status — no rung list or guard dots. " +
+          "Switch to Hierarchy object for the full panel." };
+  }
+  const light = needsLight(h) ? " Needs a light source in the arena." : "";
+  return { tone:"ok", msg:`${h.length} behavior${h.length === 1 ? "" : "s"}, cruise last.${light}` };
+}
+
+function render() {
+  renderList(els.pool, state.pool, state.poolSel, false);
+  renderList(els.hier, state.hierarchy, state.hierSel, true);
+  els.poolCount.textContent = `${state.pool.length} available`;
+
+  els.add.disabled    = state.poolSel < 0;
+  els.remove.disabled = state.hierSel < 0;
+  els.up.disabled     = state.hierSel <= 0;
+  els.down.disabled   = state.hierSel < 0 || state.hierSel >= state.hierarchy.length - 1;
+  els.clear.disabled  = !state.hierarchy.length;
+  els.download.disabled = !state.hierarchy.length;
+  els.ino.disabled      = !state.hierarchy.length;
+  els.copy.disabled     = !state.hierarchy.length;
+  els.send.disabled     = !state.hierarchy.length;
+  // The receiver sketch carries no hierarchy, so it is always available.
+  els.ble.disabled      = false;
+  els.send.title = bleSupported()
+    ? `Send this hierarchy to ${robotName()} over Bluetooth`
+    : "Needs Chrome or Edge over https or localhost";
+
+  if (state.hierarchy.length) {
+    els.code.innerHTML = highlight(generateSketch(state.hierarchy, currentName()));
+  } else {
+    els.code.textContent =
+      "// The sketch appears here as you build.\n" +
+      "// Add a behavior to begin.";
+  }
+
+  const v = validate();
+  setStatus(v.msg, v.tone);
+}
+
+/* Pool always redisplays in canonical BEHAVIORS order, so removing a
+   behaviour returns it to its original slot rather than the end. */
+function rebuildPool() {
+  state.pool = BEHAVIORS.map(b => b[1]).filter(k => !state.hierarchy.includes(k));
+}
+
+function addSel() {
+  if (state.poolSel < 0) return;
+  const key = state.pool[state.poolSel];
+  if (!key) return;
+  state.hierarchy.push(key);
+  rebuildPool();
+  state.poolSel = Math.min(state.poolSel, state.pool.length - 1);
+  render();
+}
+
+function removeSel() {
+  if (state.hierSel < 0) return;
+  state.hierarchy.splice(state.hierSel, 1);
+  rebuildPool();
+  state.hierSel = Math.min(state.hierSel, state.hierarchy.length - 1);
+  render();
+}
+
+function move(delta) {
+  const i = state.hierSel, j = i + delta;
+  if (i < 0 || j < 0 || j >= state.hierarchy.length) return;
+  const h = state.hierarchy;
+  [h[i], h[j]] = [h[j], h[i]];
+  state.hierSel = j;
+  render();
+}
+
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function downloadFolder() {
+  if (!state.hierarchy.length) {
+    setStatus("Add at least one behavior first.", "warn");
+    return;
+  }
+  const stem = `hierarchy_${timestamp(new Date()).stamp}`;
+  els.download.disabled = true;
+  setStatus("Assembling sketch folder…");
+  try {
+    saveBlob(await buildSketchZip(state.hierarchy, stem), `${stem}.zip`);
+    setStatus(`Downloaded ${stem}.zip — unzip it, then open ${stem}.ino.`);
+  } catch (err) {
+    // Almost always one of two things: the page was opened from the file
+    // system (fetch has no origin), or firmware/ethology/ is missing.
+    const local = location.protocol === "file:";
+    setStatus(local
+      ? "Can't read the firmware sources from a local file. Serve the folder over http — python3 -m http.server — or use the hosted page."
+      : `Couldn't load the firmware sources (${err.message}). Sketch only still works.`,
+      "warn");
+  } finally {
+    els.download.disabled = false;
+  }
+}
+
+async function downloadBleReceiver() {
+  const stem = `ethology_ble_${robotName().toLowerCase()}`;
+  els.ble.disabled = true;
+  setStatus(`Assembling receiver sketch for ${robotName()}…`);
+  try {
+    saveBlob(await buildBleZip(stem, activeRobot), `${stem}.zip`);
+    setStatus(`Downloaded ${stem}.zip — flash it to ${robotName()}, then send ` +
+              `hierarchies from here. No hierarchy is baked in.`);
+  } catch (err) {
+    const local = location.protocol === "file:";
+    setStatus(local
+      ? "Can't read the firmware sources from a local file. Serve the folder over http — python3 -m http.server."
+      : `Couldn't assemble the receiver sketch (${err.message}).`, "warn");
+  } finally {
+    els.ble.disabled = false;
+  }
+}
+
+async function sendHierarchy() {
+  if (!state.hierarchy.length) {
+    setStatus("Add at least one behavior first.", "warn");
+    return;
+  }
+  els.send.disabled = true;
+  try {
+    const { session } = await sendOverBle(state.hierarchy, m => setStatus(m));
+    setStatus(`${robotName()} is running your hierarchy (session ${session}).`);
+  } catch (err) {
+    // A cancelled chooser is a normal outcome, not a failure worth shouting about.
+    const cancelled = err && (err.name === "NotFoundError" || /cancel/i.test(err.message));
+    setStatus(cancelled
+      ? `No robot selected. Make sure ${robotName()} is powered and advertising.`
+      : err.message, "warn");
+  } finally {
+    els.send.disabled = false;
+    render();
+  }
+}
+
+function downloadIno() {
+  if (!state.hierarchy.length) {
+    setStatus("Add at least one behavior first.", "warn");
+    return;
+  }
+  const name = currentName();
+  saveBlob(new Blob([generateSketch(state.hierarchy, name)], { type:"text/plain" }), name);
+  setStatus(`Downloaded ${name}. It needs the firmware sources beside it to compile.`);
+}
+
+async function copyCode() {
+  if (!state.hierarchy.length) return;
+  const src = generateSketch(state.hierarchy, currentName());
+  try {
+    await navigator.clipboard.writeText(src);
+    setStatus("Sketch copied to the clipboard.");
+  } catch (e) {
+    setStatus("Copy was blocked. Select the code in the preview and copy it manually.", "warn");
+  }
+}
+
+function clearAll() {
+  state.hierarchy = [];
+  state.hierSel = -1;
+  rebuildPool();
+  render();
+  setStatus("Hierarchy cleared.");
+}
+
+/* ── Wiring ──────────────────────────────────────────────────────────────── */
+
+const STYLE_KEY = "paw.hierarchyBuilder.sketchStyle";
+const BOARD_KEY = "paw.hierarchyBuilder.board";
+
+// Short labels for the picker; the full profile label goes in the sketch header.
+const BOARD_LABELS = {
+  giga_r1_wifi__prototype: "Giga",
+  uno_r4_wifi__prototype:  "Uno R4"
+};
+
+function buildDisplayPicker() {
+  const host = document.querySelector(".display-pick");
+  Object.entries(DISPLAY_MODES).forEach(([key, label]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.display = key;
+    b.textContent = label;
+    b.title = {
+      off:    "No display code. Compiles without Arduino_GigaDisplay_GFX.",
+      status: "Connection state only — the classroom setting.",
+      hud:    "Rung list, guard dots and raw sensor values."
+    }[key];
+    b.setAttribute("aria-pressed", String(key === displayMode));
+    b.addEventListener("click", () => setDisplayMode(key));
+    host.appendChild(b);
+  });
+}
+
+function setDisplayMode(mode) {
+  displayMode = DISPLAY_MODES[mode] ? mode : "off";
+  try { localStorage.setItem(DISPLAY_KEY, displayMode); } catch (e) { /* ignore */ }
+  document.querySelectorAll(".display-pick button").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.display === displayMode)));
+  render();
+}
+
+function buildRobotPicker() {
+  const host = document.querySelector(".robot-pick");
+  ROBOT_IDS.forEach(id => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.robot = id;
+    b.textContent = id;
+    b.title = `Robot${id}`;
+    b.setAttribute("aria-pressed", String(id === activeRobot));
+    b.addEventListener("click", () => setRobot(id));
+    host.appendChild(b);
+  });
+}
+
+function setRobot(id) {
+  activeRobot = ROBOT_IDS.includes(id) ? id : "A";
+  try { localStorage.setItem(ROBOT_KEY, activeRobot); } catch (e) { /* ignore */ }
+  document.querySelectorAll(".robot-pick button").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.robot === activeRobot)));
+  render();
+}
+
+function buildBoardPicker() {
+  const host = document.querySelector(".board-pick");
+  Object.keys(HARDWARE_PROFILES.profiles).forEach(key => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.board = key;
+    b.textContent = BOARD_LABELS[key] || key;
+    b.title = HARDWARE_PROFILES.profiles[key].label;
+    b.setAttribute("aria-pressed", String(key === activeProfile));
+    b.addEventListener("click", () => setBoard(key));
+    host.appendChild(b);
+  });
+}
+
+function setBoard(key) {
+  activeProfile = HARDWARE_PROFILES.profiles[key] ? key : HARDWARE_PROFILES.default;
+  try { localStorage.setItem(BOARD_KEY, activeProfile); } catch (e) { /* ignore */ }
+  document.querySelectorAll(".board-pick button").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.board === activeProfile)));
+  render();
+}
+
+function buildStylePicker() {
+  const host = document.querySelector(".style-pick");
+  Object.entries(SKETCH_STYLES).forEach(([name, st]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.style = name;
+    b.textContent = st.label;
+    b.title = st.hint;
+    b.setAttribute("aria-pressed", String(name === sketchStyle));
+    b.addEventListener("click", () => setSketchStyle(name));
+    host.appendChild(b);
+  });
+}
+
+function setSketchStyle(name) {
+  sketchStyle = SKETCH_STYLES[name] ? name : "hierarchy";
+  try { localStorage.setItem(STYLE_KEY, sketchStyle); } catch (e) { /* ignore */ }
+  document.querySelectorAll(".style-pick button").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.style === sketchStyle)));
+  render();
+}
+
+function buildThemePicker() {
+  const host = document.querySelector(".themes");
+  Object.entries(THEMES).forEach(([name, t]) => {
+    const b = document.createElement("button");
+    b.className = "swatch";
+    b.type = "button";
+    b.dataset.theme = name;
+    b.title = t.label;
+    b.setAttribute("aria-label", `${t.label} theme`);
+    b.setAttribute("aria-pressed", "false");
+    const i = document.createElement("i");
+    i.style.background = t.swatch;
+    b.appendChild(i);
+    b.addEventListener("click", () => applyTheme(name));
+    host.appendChild(b);
+  });
+}
+
+els.add.addEventListener("click", addSel);
+els.remove.addEventListener("click", removeSel);
+els.up.addEventListener("click", () => move(-1));
+els.down.addEventListener("click", () => move(1));
+els.clear.addEventListener("click", clearAll);
+els.download.addEventListener("click", downloadFolder);
+els.send.addEventListener("click", sendHierarchy);
+els.ble.addEventListener("click", downloadBleReceiver);
+els.ino.addEventListener("click", downloadIno);
+els.copy.addEventListener("click", copyCode);
+
+document.addEventListener("keydown", ev => {
+  if (ev.target.matches("input,textarea")) return;
+  if (ev.key === "ArrowRight" && state.poolSel >= 0) { ev.preventDefault(); addSel(); }
+  if (ev.key === "ArrowLeft"  && state.hierSel >= 0) { ev.preventDefault(); removeSel(); }
+  if (ev.altKey && ev.key === "ArrowUp")   { ev.preventDefault(); move(-1); }
+  if (ev.altKey && ev.key === "ArrowDown") { ev.preventDefault(); move(1); }
+});
+
+let saved = "phosphor";
+try { saved = localStorage.getItem(THEME_KEY) || "phosphor"; } catch (e) { /* ignore */ }
+let savedStyle = "hierarchy";
+try { savedStyle = localStorage.getItem(STYLE_KEY) || "hierarchy"; } catch (e) { /* ignore */ }
+sketchStyle = SKETCH_STYLES[savedStyle] ? savedStyle : "hierarchy";
+
+let savedBoard = HARDWARE_PROFILES.default;
+try { savedBoard = localStorage.getItem(BOARD_KEY) || HARDWARE_PROFILES.default; } catch (e) { /* ignore */ }
+activeProfile = HARDWARE_PROFILES.profiles[savedBoard] ? savedBoard : HARDWARE_PROFILES.default;
+
+let savedRobot = "A";
+try { savedRobot = localStorage.getItem(ROBOT_KEY) || "A"; } catch (e) { /* ignore */ }
+activeRobot = ROBOT_IDS.includes(savedRobot) ? savedRobot : "A";
+
+let savedDisplay = "off";
+try { savedDisplay = localStorage.getItem(DISPLAY_KEY) || "off"; } catch (e) { /* ignore */ }
+displayMode = DISPLAY_MODES[savedDisplay] ? savedDisplay : "off";
+
+buildThemePicker();
+buildDisplayPicker();
+buildRobotPicker();
+buildBoardPicker();
+buildStylePicker();
+applyTheme(THEMES[saved] ? saved : "phosphor");
+rebuildPool();
+render();
+</script>
+</body>
+</html>
