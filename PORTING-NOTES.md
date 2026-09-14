@@ -1,10 +1,33 @@
 # Upstream fixes surfaced by the web port
 
+> **Working in PAW-Robotics-refactor?** Read
+> [`MAIN-PROJECT-REPORT.md`](MAIN-PROJECT-REPORT.md) instead. It covers the
+> same ground organised for that repo, with the code to copy, and without the
+> web-side items. This file is the running log and keeps the history.
+
 Things found while porting the RE Hierarchy Builder to the browser that apply
 to the main PAW-Robotics tree. The web version already does the right thing in
 each case; the Python and firmware sides do not yet.
 
 Status: `open` / `done` / `wontfix`. Update as you go.
+
+## At a glance
+
+**Still open, Python side** — items 0, 1, 2, 4, 5, 7, 8, 10. All concern
+`codegen.py` and the desktop builder; none block the web app, which already
+does the right thing in each case.
+
+**Needs an answer from you** — item 9 (are `seek_light` / `escape_rear` still
+in live saved hierarchies?). This one has teeth: `setHierarchy()` rejects a
+hierarchy *whole* on an unknown name, so any file containing them is silently
+unusable.
+
+**Done, but only in `arduino/ethology_ble_robot/`** — items 3, 6, 11, 12, 13,
+14, 16, 17, 19. That folder is ahead of the main tree; see the fold-back list
+at the end.
+
+**Untested on hardware** — `escape_back` (back bumpers are not physically
+wired), and sending over Bluetooth.
 
 ---
 
@@ -220,15 +243,19 @@ natively 480x800 portrait and the layout assumes 800x480 landscape. Use 3 if
 the shield is mounted the other way round.
 
 `setVerbose()` / `toggleVerbose()` / `verbose()` added. `PAW_DISPLAY_DEV`
-stays the compile-time gate so a classroom binary cannot be talked into
-showing the HUD; the runtime flag switches it within a dev build. Generated
-display sketches accept `v` on the serial port to toggle.
+(in `PAWConfig.h`, see item 16) stays the compile-time gate so a classroom
+binary cannot be talked into showing the HUD; the runtime flag switches it
+within a dev build. Generated display sketches accept `v` on the serial port
+to toggle.
 
 ### 13. Escape behaviours — `done` (in arduino/)
 
-**`escapeFrontCollision()` had its sides swapped**, so the robot turned into
-the obstacle it had just hit and stayed jammed. Verified on hardware; do not
-re-derive from the wheel arithmetic.
+**`escapeFrontCollision()` per-side directions: reverted, no change.** This
+was briefly "fixed" by exchanging them, which was wrong — the originals are
+correct and hardware-confirmed (left `(100, -100)`, right `(-100, 100)`). The
+error came from assuming they shared the light-behaviour fault; they do not.
+The light behaviours are reversed relative to the wheel arithmetic and these
+are not, which is why neither can be derived.
 
 **The two bumper tests were separate `if`s**, so a square-on hit that closed
 both bumpers ran one spin and then the other and they cancelled — the robot
@@ -255,11 +282,12 @@ Fixed, and a both-sensors-near case added so an object dead ahead is driven
 straight at rather than falling through every branch — the exact hole
 `EthologyRobot.h` already warns about.
 
-### 15. The BLE sketch had no `PAW_DISPLAY_DEV` define — `done`
+### 15. The BLE sketch had no `PAW_DISPLAY_DEV` define — `superseded by 16`
 
-Only comments describing it. `CogDisplay.h` supplies a `#ifndef` default of 0,
-so the sketch compiled but the HUD could never be switched on from there. A
-real define now sits beside `PAW_USE_DISPLAY`, above the include that reads it.
+Only comments described it, so the HUD could never be switched on from the
+sketch. The first fix added a real define to the `.ino`. **That fix was wrong**
+— see item 16. Both defines now live in `PAWConfig.h` and the `.ino` has
+none of its own. Kept here only so the reasoning is not repeated.
 
 ### 16. Build switches must live in a header, not the sketch — `done`
 
@@ -282,6 +310,44 @@ Verified by linking a two-translation-unit build (sketch + CogDisplay.cpp) at
 all three settings, with the values coming only from a stamped `PAWConfig.h`
 and no `-D` flags.
 
+### 17. CogDisplay additions beyond the HUD — `done` (in arduino/)
+
+- `setStatus(status, detail)` as an inline alias for `setBleStatus()`. A
+  downloaded standalone sketch has no BLE link, and calling `setBleStatus` in
+  one reads as a mistake.
+- `setRotation(DISPLAY_ROTATION)` in `begin()`; the panel is natively 480x800
+  portrait and the layout is 800x480 landscape. Use 3 if mounted inverted.
+- The `PAW ROBOTICS` title row was removed and the layout reflowed upward:
+  `STATUS_Y` 26→10, `DETAIL_Y` 100→84, `RULE1_Y` 130→114, `LIST_Y` 140→126.
+  The rung list gained the reclaimed height.
+
+### 18. Sending hierarchies over BLE — `web only, nothing upstream`
+
+The web app now talks the protocol in `CogBluetooth.h` directly via Web
+Bluetooth, so a hierarchy can go to a running robot without the Arduino IDE.
+No firmware change was needed — the protocol was already complete.
+
+Two details worth knowing if the Python client is ever revisited, because
+both are easy to get wrong:
+
+- **Subscribe to DATA before writing CMD.** The reply can otherwise land
+  before the listener is attached.
+- **A successful write is not success.** `{"cmd":"run"}` only stages the
+  names; the robot validates them and answers `running`, `busy` or an error.
+  Treating the write as the outcome hides a rejected behaviour name, which is
+  exactly the failure that looks like a dead robot.
+
+`RobotBLEClient` in `engine/bluetooth/robot_bt_client.py` must keep the same
+three UUIDs. They are duplicated in `index.html` with a comment saying so.
+
+### 19. Robot identity is one setting, used twice — `done`
+
+`PAW_ROBOT_ID` in `PAWConfig.h` sets the advertising name, and the web app
+stamps it when you download a receiver sketch. The same picker filters the
+scan when sending. Splitting these into two settings would recreate the fault
+`CogBluetooth.h` already documents: boards flashed from an unedited copy all
+came up as `RobotA`.
+
 ## Web-side follow-ups
 
 Not upstream, but the matching to-do here.
@@ -290,12 +356,25 @@ Not upstream, but the matching to-do here.
   to the dependency closure means adding it there too.
 - `canonicalBehavior()` is currently unreachable — nothing loads a saved
   hierarchy. It exists for a future load/save feature. See item 9.
-- Transports are unimplemented. When they land they go behind a common
-  adapter: `DownloadIno` (ships now), `UsbSerial` (Web Serial), `BleGatt`
-  (Web Bluetooth, matching the WinRT GATT path the desktop app uses).
-- `arduino/ethology_ble_robot/` carries items 3 and 6 plus the introspection
-  API (`lastFiredIndex`, `behaviorAt`, `guardMet`, `snapshot`) and
-  `CogDisplay`. Fold these back into the main tree's `firmware/shared/`.
+- Transports: download and Web Bluetooth both ship. Web Serial over USB is
+  still unimplemented — it would work on every board, including ones with no
+  radio, and is the obvious next one.
+- **`arduino/ethology_ble_robot/` is ahead of the main tree.** Everything
+  marked `done` above lives there and nowhere else. What to fold back into
+  `firmware/shared/`:
+  - `EthologyRobot` — member initialisers, `lastFiredIndex()`,
+    `behaviorAt()`, `guardMet()` + the `_runRung()` refactor, `snapshot()`,
+    the `cruiseArc` hold, `ESCAPE_SECONDS`, the fixed `escapeFrontCollision()`
+    / `escapeBackCollision()` / `approachObject()` / light behaviours, and
+    `leftBackBump` on D8.
+  - `CogDisplay.h` / `.cpp` — new files.
+  - `PAWConfig.h` — new file, and the reason the build switches work at all.
+  - `ethology_ble_robot.ino` — config block replaced by the `PAWConfig.h`
+    include; its private `CogDisplay` stub deleted, since the header now
+    supplies one.
+- Display mode (Off / Status / Full HUD) and robot letter are UI settings
+  stamped into `PAWConfig.h` at download time, for both the hierarchy sketch
+  and the BLE receiver.
 - Two sketch styles ship: hierarchy-object (default) and unrolled if/else.
   The choice persists in `localStorage`. Both were compile-checked with
   `g++ -fsyntax-only -Wall` across valid, cruise-middle, cruise-only and

@@ -86,6 +86,13 @@ unlisted is silently omitted from every download.
 `firmware/hud/` moves the other way: `CogHUD` is new here and belongs in the
 main project's `firmware/shared/`.
 
+## For the main project
+
+[`MAIN-PROJECT-REPORT.md`](MAIN-PROJECT-REPORT.md) collects every issue and
+change found here that belongs in `PAW-Robotics-refactor` — six hardware bugs,
+the `EthologyRobot` API additions, two new firmware files, seven `codegen.py`
+items, and three open questions.
+
 ## Deploy to GitHub Pages
 
 1. Commit `index.html` to a repository.

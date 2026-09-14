@@ -158,10 +158,11 @@ private:
     static const uint16_t C_HI_TEXT = 0x0000;
 
     static const int16_t PAD      = 20;
-    static const int16_t STATUS_Y = 26;
-    static const int16_t DETAIL_Y = 100;
-    static const int16_t RULE1_Y  = 130;
-    static const int16_t LIST_Y   = 140;
+    // No title row: the status headline starts at the top of the panel.
+    static const int16_t STATUS_Y = 10;
+    static const int16_t DETAIL_Y = 84;
+    static const int16_t RULE1_Y  = 114;
+    static const int16_t LIST_Y   = 126;
     static const int16_t ROW_H    = 34;
     static const int16_t RULE2_Y  = 416;
     static const int16_t SENS_Y   = 426;

@@ -54,8 +54,13 @@ body[data-scanlines="true"] #scanlines { opacity:1; }
 }
 
 header.masthead {
-  display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;
+  display:flex; align-items:center; gap:16px; flex-wrap:wrap;
   padding-bottom:10px; border-bottom:1px solid var(--border);
+}
+/* The spacers do the centring. On a narrow screen they collapse and the
+   groups stack left, which reads better than a squeezed three-column row. */
+@media (max-width:900px) {
+  header.masthead .spacer { flex:0 0 100%; height:0; }
 }
 .masthead h1 {
   margin:0; font-size:1.45rem; font-weight:700; letter-spacing:.04em;
@@ -65,8 +70,9 @@ header.masthead {
 .masthead .spacer { flex:1 1 auto; }
 
 /* Theme picker — swatch buttons, one per palette. */
-.themes { display:flex; gap:6px; align-items:center; }
-.themes .lbl { color:var(--text-dim); font-size:.7rem; letter-spacing:.1em; margin-right:4px; }
+.ctl { display:flex; gap:6px; align-items:center; }
+.ctl .lbl { color:var(--text-dim); font-size:.7rem; letter-spacing:.1em; margin-right:4px; }
+.theme-pick { display:flex; gap:6px; align-items:center; }
 .swatch {
   width:26px; height:26px; padding:0; cursor:pointer;
   background:var(--panel); border:1px solid var(--border);
@@ -238,18 +244,25 @@ footer.colophon {
   <header class="masthead">
     <h1>Hierarchy Builder</h1>
     <span class="sub">Robot Ethology</span>
+
     <span class="spacer"></span>
-    <div class="themes" role="group" aria-label="Robot">
-      <span class="lbl">ROBOT</span>
-      <span class="robot-pick" role="group" aria-label="Target robot"></span>
-    </div>
-    <div class="themes" role="group" aria-label="Display">
+
+    <!-- Centred: the two settings that change what gets built. -->
+    <div class="ctl" role="group" aria-label="Display">
       <span class="lbl">DISPLAY</span>
       <span class="display-pick" role="group" aria-label="Display mode"></span>
     </div>
-    <div class="themes" role="group" aria-label="Colour theme">
+    <div class="ctl" role="group" aria-label="Robot">
+      <span class="lbl">ROBOT</span>
+      <span class="robot-pick" role="group" aria-label="Target robot"></span>
+    </div>
+
+    <span class="spacer"></span>
+
+    <!-- Far right: appearance only, nothing that affects output. -->
+    <div class="ctl themes" role="group" aria-label="Colour theme">
       <span class="lbl">THEME</span>
-      <!-- swatch buttons injected by JS -->
+      <span class="theme-pick" role="group" aria-label="Colour theme"></span>
     </div>
   </header>
 
@@ -295,7 +308,7 @@ footer.colophon {
   </section>
 
   <footer class="colophon">
-    PAW Robotics &middot; behavior wire names must match BEHAVIOR_NAMES in EthologyRobot.cpp
+    Behavior wire names must match BEHAVIOR_NAMES in EthologyRobot.cpp
   </footer>
 </div>
 
@@ -1480,7 +1493,7 @@ function setSketchStyle(name) {
 }
 
 function buildThemePicker() {
-  const host = document.querySelector(".themes");
+  const host = document.querySelector(".theme-pick");
   Object.entries(THEMES).forEach(([name, t]) => {
     const b = document.createElement("button");
     b.className = "swatch";

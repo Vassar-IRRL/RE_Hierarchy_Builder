@@ -167,16 +167,22 @@ void EthologyRobot::approachLight() {
 // ================================
 // Struck on the front: spin AWAY from the side that was hit.
 //
-// VERIFIED ON HARDWARE. The per-side directions were previously swapped, so
-// the robot turned into the obstacle it had just hit and stayed jammed
-// against it. As with the light behaviours, do not re-derive these from the
-// wheel arithmetic — press a bumper and watch.
+// PER-SIDE DIRECTIONS VERIFIED ON HARDWARE by pressing each bumper. These are
+// the ORIGINAL pairings. An intermediate version exchanged them, on the
+// mistaken assumption that they shared the fault found in the light
+// behaviours. They do not. A left hit spins (100, -100); a right hit spins
+// (-100, 100). Exchanged, the robot drives into whatever it just hit and
+// stays jammed against it.
 //
-// The two tests are now EXCLUSIVE. They used to be separate ifs, so a
-// head-on hit that closed both bumpers ran one spin and then the other, and
-// the two cancelled: the robot sat still while pinned, which is the worst
-// possible response to being stuck. A both-sides hit now reverses instead,
-// which is the only move that clears a square-on obstacle.
+// So: the light behaviours ARE reversed relative to what the wheel arithmetic
+// suggests, and these are NOT. That is precisely why neither can be derived.
+// Press a bumper, watch which way it turns, believe the robot.
+//
+// The two tests being EXCLUSIVE is a separate fix from the directions. They
+// used to be independent ifs, so a head-on hit closing both bumpers ran one
+// spin and then the other and the two cancelled — the robot sat still while
+// pinned, the worst available response to being stuck. A both-sides hit now
+// reverses, the only move that clears a square-on obstacle.
 void EthologyRobot::escapeFrontCollision() {
     const bool left  = (_leftFrontBumpData  == 0);
     const bool right = (_rightFrontBumpData == 0);
@@ -185,10 +191,10 @@ void EthologyRobot::escapeFrontCollision() {
         driveProportional(-100, -100, ESCAPE_SECONDS);   // pinned: back straight out
     }
     else if (left) {
-        driveProportional(-100, 100, ESCAPE_SECONDS);
+        driveProportional(100, -100, ESCAPE_SECONDS);
     }
     else if (right) {
-        driveProportional(100, -100, ESCAPE_SECONDS);
+        driveProportional(-100, 100, ESCAPE_SECONDS);
     }
 }
 

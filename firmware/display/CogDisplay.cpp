@@ -82,10 +82,6 @@ void CogDisplay::updateStatus() {
 }
 
 void CogDisplay::_paintFrame() {
-    gfx.setTextSize(2);
-    gfx.setTextColor(C_DIM);
-    gfx.setCursor(PAD, 4);
-    gfx.print("PAW ROBOTICS");
     gfx.drawFastHLine(PAD, RULE1_Y, SCREEN_W - 2 * PAD, C_DIM);
 #if PAW_DISPLAY_DEV
     if (_verbose) gfx.drawFastHLine(PAD, RULE2_Y, SCREEN_W - 2 * PAD, C_DIM);
