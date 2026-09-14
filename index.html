@@ -312,7 +312,7 @@ footer.colophon {
 
   <footer class="colophon">
     Behavior wire names must match BEHAVIOR_NAMES in EthologyRobot.cpp
-    <span class="build">build 2026-09-14.1435</span>
+    <span class="build">build 2026-09-14.1503</span>
   </footer>
 </div>
 
@@ -836,7 +836,7 @@ function generateSketch(hierarchy, sketchName, profileKey) {
 // Bumped whenever index.html changes. Shown in the footer and named in the
 // download confirmation — a stale cached page is otherwise indistinguishable
 // from a bug in the bundler.
-const BUILD_ID = "2026-09-14.1435";
+const BUILD_ID = "2026-09-14.1503";
 
 const FIRMWARE_DIR = "firmware/ethology/";
 const DISPLAY_DIR  = "firmware/display/";
@@ -1174,17 +1174,23 @@ function renderList(ul, keys, selIdx, numbered) {
       li.appendChild(tag);
     }
 
+    // Selecting SELECTS. Nothing here moves a behaviour — the arrow buttons do
+    // that, and they are the only thing that does.
+    //
+    // There used to be dblclick and Enter/Space shortcuts that selected and
+    // moved in one action. They had to go: pick() calls render(), which tears
+    // down and rebuilds every li, so the elements a double-click is measured
+    // against are replaced between the two clicks and it fires in cases that
+    // feel like a single click. A behaviour that appears and disappears while
+    // you are trying to choose one is worse than a missing shortcut.
     const pick = () => {
       if (numbered) { state.hierSel = i; state.poolSel = -1; }
       else          { state.poolSel = i; state.hierSel = -1; }
       render();
     };
     li.addEventListener("click", pick);
-    li.addEventListener("dblclick", () => { pick(); numbered ? removeSel() : addSel(); });
     li.addEventListener("keydown", ev => {
-      if (ev.key === "Enter" || ev.key === " ") {
-        ev.preventDefault(); pick(); numbered ? removeSel() : addSel();
-      }
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(); }
     });
     ul.appendChild(li);
   });
@@ -1546,8 +1552,14 @@ els.ble.addEventListener("click", downloadBleReceiver);
 els.ino.addEventListener("click", downloadIno);
 els.copy.addEventListener("click", copyCode);
 
+// Keyboard equivalents of the arrow buttons, and nothing else moves a
+// behaviour. Scoped to the lists: a button has focus while you are tabbing
+// through the theme, robot or display pickers, and arrow keys there should
+// change the picker, not silently add a behaviour to the hierarchy.
 document.addEventListener("keydown", ev => {
-  if (ev.target.matches("input,textarea")) return;
+  const t = ev.target;
+  if (t.matches("input,textarea,button")) return;
+
   if (ev.key === "ArrowRight" && state.poolSel >= 0) { ev.preventDefault(); addSel(); }
   if (ev.key === "ArrowLeft"  && state.hierSel >= 0) { ev.preventDefault(); removeSel(); }
   if (ev.altKey && ev.key === "ArrowUp")   { ev.preventDefault(); move(-1); }
