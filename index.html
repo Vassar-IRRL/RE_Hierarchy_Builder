@@ -226,6 +226,9 @@ button.btn.danger:hover:not(:disabled) { border-color:var(--amber); }
 .tok-fn   { color:var(--blue-ph); }
 .tok-warn { color:var(--amber); }
 
+footer.colophon .build {
+  float:right; color:var(--text-dim); opacity:.7;
+}
 footer.colophon {
   color:var(--text-dim); font-size:.72rem; letter-spacing:.04em;
   border-top:1px solid var(--border-dim); padding-top:10px;
@@ -309,6 +312,7 @@ footer.colophon {
 
   <footer class="colophon">
     Behavior wire names must match BEHAVIOR_NAMES in EthologyRobot.cpp
+    <span class="build">build 2026-09-14.1435</span>
   </footer>
 </div>
 
@@ -595,7 +599,10 @@ function sketchParts(hierarchy, sketchName, profileKey) {
     ...(profile.sketch_includes || []).map(inc => `#include ${inc}`),
     `#include "CogServo.h"`,
     `#include "${robotHdr}"`,
-    displayOn() ? `#include "PAWConfig.h"` : null,
+    // PAWConfig.h always: it carries PAW_ROBOT_ID and the trace flag too.
+    `#include "PAWConfig.h"`,
+    // CogDisplay.h only when the display is in use. The FILES ship either
+    // way, so switching this on afterwards is an edit here, not a re-download.
     displayOn() ? `#include "CogDisplay.h"` : null
   ].filter(Boolean).join("\n");
 
@@ -605,7 +612,10 @@ function sketchParts(hierarchy, sketchName, profileKey) {
   // "undefined reference to CogDisplay::setGuards".
   const displaySwitch = displayOn()
     ? `// Display settings are in PAWConfig.h — edit them there, not here.\n`
-    : "";
+    : `// No display. CogDisplay.h/.cpp and PAWConfig.h are in this folder
+// anyway: set PAW_USE_DISPLAY to 1 in PAWConfig.h, add
+//   #include "CogDisplay.h"
+// and a CogDisplay of your own if you want to add one later.\n`;
   const servoDecl  = profile.sketch_servo_decl  ?? "CogServo driveServos;";
   const servoBegin = fmt(profile.sketch_servo_begin ?? "", pins);
   const botDecl    = fmt(profile.sketch_robot_decl || "{robot_class} bot;",
@@ -733,8 +743,7 @@ ${installBlock(p)}
 }
 
 void loop() {
-  bot.hierarchy();
-${displayTick(p)}
+  bot.hierarchy();${displayTick(p)}
 }
 `);
 }
@@ -824,6 +833,11 @@ function generateSketch(hierarchy, sketchName, profileKey) {
    the include graph reaches from EthologyRobot.h.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+// Bumped whenever index.html changes. Shown in the footer and named in the
+// download confirmation — a stale cached page is otherwise indistinguishable
+// from a bug in the bundler.
+const BUILD_ID = "2026-09-14.1435";
+
 const FIRMWARE_DIR = "firmware/ethology/";
 const DISPLAY_DIR  = "firmware/display/";
 const BLE_DIR      = "firmware/ble/";
@@ -861,11 +875,13 @@ async function fetchFirmware() {
   // add files from elsewhere — the display board pulls in CogDisplay, which
   // is deliberately NOT in the base set: it would make every download depend
   // on Arduino_GigaDisplay_GFX.
+  // Always, for the same reason as the receiver: the sketch includes them
+  // unconditionally and they cost a display-free build nothing. It also means
+  // flipping PAW_USE_DISPLAY in a downloaded folder just works, rather than
+  // failing on a missing header.
   const jobs = FIRMWARE_FILES.map(name => ({ dir:FIRMWARE_DIR, name }))
-    .concat(displayOn()
-      ? ["PAWConfig.h", "CogDisplay.h", "CogDisplay.cpp"]
-          .map(name => ({ dir:DISPLAY_DIR, name }))
-      : []);
+    .concat(["PAWConfig.h", "CogDisplay.h", "CogDisplay.cpp"]
+      .map(name => ({ dir:DISPLAY_DIR, name })));
 
   return Promise.all(jobs.map(async ({ dir, name }) => {
     const res = await fetch(dir + name, { cache:"no-cache" });
@@ -951,17 +967,24 @@ function zipStore(entries) {
  * unreachable and two powered robots collided. Setting it here from the same
  * picker that filters the scan means the two cannot disagree.
  */
+let bleFileCount = 0;
+
 async function buildBleZip(stem, robotId) {
   const enc  = new TextEncoder();
   const dec  = new TextDecoder();
 
   const jobs = [...FIRMWARE_FILES.map(name => ({ dir:FIRMWARE_DIR, name })),
                 ...BLE_EXTRA_FILES.map(name => ({ dir:BLE_DIR,      name })),
-                // PAWConfig.h always: the receiver reads PAW_ROBOT_ID from it.
+                // PAWConfig.h and CogDisplay ALWAYS, whatever the display
+                // setting. The sketch includes both unconditionally, and
+                // CogDisplay compiles to nothing when PAW_USE_DISPLAY is 0 —
+                // the class becomes an inline no-op stub and the .cpp body is
+                // inside the guard, so a display-free build still needs no
+                // Arduino_GigaDisplay_GFX. Shipping them conditionally left
+                // the sketch including a file that was not in the folder.
                 { dir:BLE_DIR, name:"PAWConfig.h" },
-                ...(displayOn()
-                     ? ["CogDisplay.h", "CogDisplay.cpp"].map(name => ({ dir:DISPLAY_DIR, name }))
-                     : []),
+                ...["CogDisplay.h", "CogDisplay.cpp"]
+                     .map(name => ({ dir:DISPLAY_DIR, name })),
                 { dir:BLE_DIR, name:BLE_INO }];
 
   const files = await Promise.all(jobs.map(async ({ dir, name }) => {
@@ -993,6 +1016,7 @@ async function buildBleZip(stem, robotId) {
     return { name:`${stem}/${stem}.ino`, data:f.data };
   });
 
+  bleFileCount = entries.length;
   return zipStore(entries);
 }
 
@@ -1326,9 +1350,10 @@ async function downloadBleReceiver() {
   els.ble.disabled = true;
   setStatus(`Assembling receiver sketch for ${robotName()}…`);
   try {
-    saveBlob(await buildBleZip(stem, activeRobot), `${stem}.zip`);
-    setStatus(`Downloaded ${stem}.zip — flash it to ${robotName()}, then send ` +
-              `hierarchies from here. No hierarchy is baked in.`);
+    const blob = await buildBleZip(stem, activeRobot);
+    saveBlob(blob, `${stem}.zip`);
+    setStatus(`Downloaded ${stem}.zip — ${bleFileCount} files, build ${BUILD_ID}. ` +
+              `Flash it to ${robotName()}, then send hierarchies from here.`);
   } catch (err) {
     const local = location.protocol === "file:";
     setStatus(local
