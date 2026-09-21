@@ -93,5 +93,5 @@ else
 fi
 
 echo
-echo "Note: CogBluetooth is never bundled. CogDisplay ships in firmware/display/"
-echo "and is added to a download only by the 'Giga + Display' board profile."
+echo "Note: CogBluetooth ships only with the BLE receiver. CogDisplay and"
+echo "PAWConfig.h ship with every download; the Display setting decides use."
