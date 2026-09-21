@@ -212,6 +212,33 @@ threshold is ever raised.
 
 ---
 
+### 1.10 Tuning from hardware, and escapes that arc backward
+
+**Constants.** `LIGHT_THRESHOLD` 15 → 20, `CRUISE_SPEED` 60 → 80, arc
+30/50 → 50/70. The arc keeps a fixed 20-point wheel difference below cruise, so
+its radius grows only with the speed sum — about 0.16 m → 0.24 m by the
+header's own figures, well short of the 0.52 m the header warns about.
+
+`LIGHT_THRESHOLD` stays an absolute value on purpose: sensitivity then depends
+on sensor geometry (splayed or spaced wider sees a steeper gradient), so robots
+built differently respond differently, which is part of what students observe.
+
+**Front-collision escapes now arc backward** instead of spinning in place,
+duration unchanged. Spinning changed heading without moving the robot, so it
+could rotate clear and drive straight back in.
+
+```cpp
+else if (left)  { driveProportional(-50, -70, ESCAPE_SECONDS); }
+else if (right) { driveProportional(-70, -50, ESCAPE_SECONDS); }
+```
+
+The two are exact mirrors, and each turns the same way as the hardware-verified
+spin it replaces. An intermediate draft had `(-50, 70)` for the left hit — a
+typo, confirmed by the author — which would have driven forward and turned
+toward the obstacle.
+
+---
+
 <a name="part-2"></a>
 
 ## Part 2 — `EthologyRobot` API additions
@@ -557,6 +584,10 @@ carries a comment saying the others must match.
 | Constant | Value | Why |
 |---|---|---|
 | `ESCAPE_SECONDS` | `0.8` | Both escapes; 0.1 was imperceptible (1.5) |
+| `LIGHT_THRESHOLD` | `20` (was 15) | 15 fired weakly on hardware (1.10) |
+| `CRUISE_SPEED` | `80` (was 60) | Reads better; stronger collisions (1.10) |
+| `ARC_INNER_SPEED` | `50` (was 30) | Set on hardware (1.10) |
+| `ARC_OUTER_SPEED` | `70` (was 50) | Set on hardware (1.10) |
 | `ARC_HOLD_MIN_MS` | `700` | Lower bound on one arc direction (1.6) |
 | `ARC_HOLD_MAX_MS` | `1900` | Upper bound |
 
