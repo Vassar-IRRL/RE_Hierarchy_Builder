@@ -1,0 +1,13 @@
+# Build scratch
+*.o
+*.out
+/tmp/
+
+# Arduino IDE
+build/
+*.hex
+*.elf
+
+# OS
+.DS_Store
+Thumbs.db

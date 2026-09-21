@@ -11,7 +11,7 @@
 # cleanly, so nothing warns you.
 #
 # Direction of travel:
-#   arduino/ethology_ble_robot/  ->  firmware/ethology/   (the 14 Cog/Robot files)
+#   arduino/ethology_robot_firmware/ -> firmware/ethology/  (14 Cog/Robot files)
 #
 # CogBluetooth and CogDisplay are deliberately excluded: the downloaded student
 # sketch installs a hierarchy from a const array and has no BLE link and no
@@ -29,7 +29,7 @@ fi
 # Accept either the main tree's firmware/shared or an Arduino sketch folder
 # (this repo's arduino/ethology_ble_robot, or a copy of it).
 if   [[ -d "$SRC_ROOT/firmware/shared"           ]]; then SRC="$SRC_ROOT/firmware/shared"
-elif [[ -d "$SRC_ROOT/ethology_ble_robot"        ]]; then SRC="$SRC_ROOT/ethology_ble_robot"
+elif [[ -d "$SRC_ROOT/ethology_robot_firmware"   ]]; then SRC="$SRC_ROOT/ethology_robot_firmware"
 elif [[ -f "$SRC_ROOT/EthologyRobot.h"           ]]; then SRC="$SRC_ROOT"
 else SRC="$SRC_ROOT/firmware/shared"; fi
 DEST="$(cd "$(dirname "$0")" && pwd)/firmware/ethology"

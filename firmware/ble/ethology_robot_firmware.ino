@@ -91,27 +91,6 @@
 //   All build switches now live in PAWConfig.h — robot letter, display mode,
 //   sensor tracing. Edit that file; they must be visible to every translation
 //   unit, not just this one.
-// ── Heartbeat LED polarity ────────────────────────────────────────────────────
-// GIGA R1: LED_BUILTIN is one of the on-board RGB LEDs and they are ACTIVE LOW
-// — digitalWrite(pin, LOW) turns it ON. Uno R4 is active HIGH. Getting this
-// wrong does not hide the signal, but it inverts it: the "solid = running"
-// state would read as dark, which is the same as "no power".
-//
-// Set to 1 on Giga, 0 on Uno R4.
-#ifndef PAW_LED_ACTIVE_LOW
-  #if defined(ARDUINO_GIGA) || defined(ARDUINO_ARCH_MBED_GIGA)
-    #define PAW_LED_ACTIVE_LOW 1
-  #else
-    #define PAW_LED_ACTIVE_LOW 0
-  #endif
-#endif
-
-#if PAW_LED_ACTIVE_LOW
-  #define LED_WRITE(on) digitalWrite(LED_BUILTIN, (on) ? LOW : HIGH)
-#else
-  #define LED_WRITE(on) digitalWrite(LED_BUILTIN, (on) ? HIGH : LOW)
-#endif
-
 // ── Build configuration ───────────────────────────────────────────────────────
 // Robot letter, display mode and tracing all live in PAWConfig.h so that this
 // sketch and CogDisplay.cpp compile against the SAME values. Defining them

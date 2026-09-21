@@ -23,7 +23,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 STUBS="$ROOT/tools/stubs"
-SKETCH="$ROOT/arduino/ethology_ble_robot"
+SKETCH="$ROOT/arduino/ethology_robot_firmware"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -80,7 +80,18 @@ else
     printf '  - node not installed; skipping the script parse check\n'
 fi
 
-# ── 3. The bundled copy matches the sketch ───────────────────────────────────
+# -- 3. Every download is self-contained -------------------------------------
+# A sketch that includes a header the ZIP does not carry fails on the student's
+# machine, not here. This happened once: the receiver sketch included
+# CogDisplay.h while the bundler shipped it only when the display was on.
+echo "Download bundles"
+if python3 "$ROOT/tools/bundle-includes.py" "$ROOT"; then
+    pass "every #include resolves inside the bundle"
+else
+    bad "a bundle has an unresolved include"
+fi
+
+# -- 4. The bundled copy matches the sketch ───────────────────────────────────
 echo "Firmware sync"
 if bash "$ROOT/sync-firmware.sh" "$ROOT/arduino" >"$WORK/sync.txt" 2>&1; then
     pass "firmware/ethology matches arduino/, manifest agrees"

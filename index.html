@@ -199,21 +199,21 @@ button.btn.danger:hover:not(:disabled) { border-color:var(--amber); }
   outline:2px solid var(--white-green); outline-offset:2px; }
 
 .pick-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-.style-pick, .board-pick { display:flex; gap:0; }
-.style-pick button, .board-pick button {
+.board-pick { display:flex; gap:0; }
+.board-pick button {
   font-family:var(--font-body); font-size:.66rem; letter-spacing:.08em;
   text-transform:uppercase; padding:4px 10px; cursor:pointer;
   background:var(--panel-deep); color:var(--text-dim);
   border:1px solid var(--border-dim); border-radius:0;
 }
-.style-pick button:first-child, .board-pick button:first-child {
+.board-pick button:first-child {
   border-radius:var(--radius) 0 0 var(--radius); }
-.style-pick button:last-child, .board-pick button:last-child {
+.board-pick button:last-child {
   border-radius:0 var(--radius) var(--radius) 0; }
-.style-pick button[aria-pressed="true"], .board-pick button[aria-pressed="true"] {
+.board-pick button[aria-pressed="true"] {
   background:var(--phosphor-dim); color:var(--white-green); border-color:var(--phosphor);
 }
-.style-pick button:focus-visible, .board-pick button:focus-visible {
+.board-pick button:focus-visible {
   outline:2px solid var(--white-green); outline-offset:2px; }
 
 .preview pre {
@@ -289,10 +289,11 @@ footer.colophon {
   </main>
 
   <div class="actions">
-    <button class="btn accent" id="btn-send">Send over Bluetooth</button>
-    <button class="btn" id="btn-download">Download sketch folder</button>
+    <!-- Left to right is the order you use them in: flash the receiver once,
+         then send; or skip Bluetooth and download the sketch folder. -->
     <button class="btn" id="btn-ble">BLE receiver sketch</button>
-    <button class="btn" id="btn-ino">Sketch only (.ino)</button>
+    <button class="btn accent" id="btn-send">Send over BLE</button>
+    <button class="btn" id="btn-download">Download sketch folder</button>
     <button class="btn" id="btn-copy">Copy code</button>
     <span class="spacer"></span>
     <button class="btn danger" id="btn-clear">Clear all</button>
@@ -304,7 +305,6 @@ footer.colophon {
     <h2 id="prev-h">Generated sketch
       <span class="pick-row">
         <span class="board-pick" role="group" aria-label="Target board"></span>
-        <span class="style-pick" role="group" aria-label="Sketch style"></span>
       </span>
     </h2>
     <pre id="code" aria-live="off"></pre>
@@ -312,7 +312,7 @@ footer.colophon {
 
   <footer class="colophon">
     Behavior wire names must match BEHAVIOR_NAMES in EthologyRobot.cpp
-    <span class="build">build 2026-09-14.1503</span>
+    <span class="build">build 2026-09-21.1709</span>
   </footer>
 </div>
 
@@ -662,158 +662,57 @@ ${listing}
 }
 
 /**
- * Unrolled form — every rung written out as if/else. This is the "teach the
- * code" artifact: it duplicates what _runRung() does so students can read the
- * arbitration instead of trusting it. Because the guards only read values
- * cached by readSensors(), the sketch must call it itself.
+ * The downloadable sketch: the student's hierarchy written out as if/else
+ * rungs directly in loop(). No BLE, nothing installed in EthologyRobot.
+ *
+ * This is the "teach the code" artifact. EthologyRobot::hierarchy() does the
+ * same arbitration inside a loop over a table; here it is on the page, so the
+ * point of a subsumption hierarchy is visible — priority IS the order of the
+ * branches, and a rung runs only when every rung above it declined.
+ *
+ * Rung rules (buildRungs): first rung `if`, later rungs `else if`; a cruise
+ * behaviour is a bare `else` only when last, otherwise `if (true)` or
+ * `else if (true)` so a misplaced cruise still compiles and the dead rungs
+ * below it are observable on the robot; a cruise-only hierarchy is the lone
+ * `if (true)`.
+ *
+ * Because no hierarchy is installed, lastFiredIndex() stays -1 and guardMet()
+ * would describe rungs the robot is not arbitrating — so the display shows
+ * status only here, whatever PAW_DISPLAY_DEV says. The full HUD belongs to the
+ * BLE receiver, which installs the hierarchy it is sent.
  */
-function generateSketchUnrolled(hierarchy, sketchName, profileKey) {
+function generateSketchInline(hierarchy, sketchName, profileKey) {
   const p     = sketchParts(hierarchy, sketchName, profileKey);
   const rungs = buildRungs(hierarchy).join("\n");
 
-  // No hierarchy is installed in this style — the rungs are written out and
-  // bot.hierarchy() is never called, so lastFiredIndex() would always be -1
-  // and guardMet() would describe rungs the robot is not arbitrating. The
-  // panel therefore shows status only here, whatever PAW_DISPLAY_DEV says.
   const setupTail = p.display ? "\n\n  display.setStatus(\"RUNNING\");" : "";
-  const loopTail  = p.display ? "\n  display.updateStatus();" : "";
+  const loopTail  = p.display ? "\n\n  display.updateStatus();" : "";
 
   return (
 `${p.header}
 ${p.displaySwitch}${p.includes}
 
 ${p.decls}
-
-void hierarchy() {
-  // Sense first. readSensors() halts the motors and samples every sensor
-  // once, so every guard and every behaviour below sees the same reading.
-  // The guards read cached values only — without this they never update.
-  bot.readSensors();
-
-${rungs}
-}
 
 void setup() {
 ${p.setupBody}${setupTail}
 }
 
 void loop() {
-  hierarchy();${loopTail}
+  // Sense first. readSensors() halts the motors and samples every sensor once,
+  // so every condition and every behavior below sees the same reading. The
+  // conditions read cached values only — without this line they never update.
+  bot.readSensors();
+
+  // Highest priority first. The first rung whose condition is met wins; every
+  // rung below it is skipped this tick.
+${rungs}${loopTail}
 }
 `);
 }
-
-/**
- * Hierarchy-object form — the default.
- *
- * EthologyRobot owns arbitration: setHierarchy() parses wire names against
- * BEHAVIOR_NAMES, and hierarchy() calls readSensors() then walks the rungs via
- * _runRung(), which holds every guard/action pairing. The sketch supplies the
- * ordering and nothing else, so it cannot drift from the firmware — and it is
- * the same path the robot takes when a hierarchy arrives over BLE.
- */
-function generateSketchHierarchy(hierarchy, sketchName, profileKey) {
-  const p = sketchParts(hierarchy, sketchName, profileKey);
-
-  const width = Math.max(...hierarchy.map(k => k.length)) + 3;
-  const table = hierarchy.map((k, i) => {
-    const q = `"${k}"` + (i < hierarchy.length - 1 ? "," : " ");
-    return `  ${q.padEnd(width + 2)}// ${i + 1}. ${BEHAVIOR_MAP[k][0]}`;
-  }).join("\n");
-
-  return (
-`${p.header}
-${p.displaySwitch}${p.includes}
-
-${p.decls}
-
-// The hierarchy, highest priority first. EthologyRobot::setHierarchy() parses
-// these wire names; hierarchy() samples the sensors once per tick and runs the
-// first behavior whose condition is met. A cruise behavior always fires, so
-// anything listed below one can never run.
-const char* const HIERARCHY[] = {
-${table}
-};
-const int HIERARCHY_LEN = sizeof(HIERARCHY) / sizeof(HIERARCHY[0]);
-
-void setup() {
-${p.setupBody}
-
-${installBlock(p)}
-}
-
-void loop() {
-  bot.hierarchy();${displayTick(p)}
-}
-`);
-}
-
-/** setHierarchy() plus, on a display board, the status reporting. */
-function installBlock(parts) {
-  if (!parts.display) {
-    return (
-`  int bad = bot.setHierarchy(HIERARCHY, HIERARCHY_LEN);
-  if (bad != EthologyRobot::HIERARCHY_OK) {
-    Serial.print("Unrecognised behavior at index ");
-    Serial.println(bad);
-  }`);
-  }
-  return (
-`  int bad = bot.setHierarchy(HIERARCHY, HIERARCHY_LEN);
-  if (bad != EthologyRobot::HIERARCHY_OK) {
-    Serial.print("Unrecognised behavior at index ");
-    Serial.println(bad);
-    // Say so on the panel too. A robot that silently does nothing is the
-    // single most common thing to lose time to.
-    display.setStatus("BAD HIERARCHY");
-    return;
-  }
-
-  display.setHierarchy(HIERARCHY, HIERARCHY_LEN);
-  display.setStatus("RUNNING");`);
-}
-
-/** The per-tick display feed. Empty on a board without a panel. */
-function displayTick(parts) {
-  if (!parts.display) return "";
-  return (
-`
-  // Feed the panel. With PAW_DISPLAY_DEV 0 everything except updateStatus()
-  // compiles to nothing, so these calls cost a classroom build nothing.
-  bool guards[CogDisplay::MAX_ROWS];
-  for (int i = 0; i < HIERARCHY_LEN; i++) {
-    guards[i] = bot.guardMet(bot.behaviorAt(i));
-  }
-  display.setGuards(guards, HIERARCHY_LEN);
-  display.setActive(bot.lastFiredIndex());
-
-  const EthologyRobot::SensorSnapshot s = bot.snapshot();
-  display.setSensors(s.leftProx, s.rightProx, s.lightGradient,
-                     s.leftFrontBump, s.rightFrontBump,
-                     s.leftBackBump,  s.rightBackBump);
-  display.update();
-  display.updateStatus();
-
-  // Type 'v' in the Serial Monitor to toggle the HUD without recompiling.
-  // Only does anything when PAW_DISPLAY_DEV is 1 — a classroom build has no
-  // HUD in the binary to reveal.
-  while (Serial.available()) {
-    if (Serial.read() == 'v') display.toggleVerbose();
-  }`);
-}
-
-const SKETCH_STYLES = {
-  hierarchy: { label:"Hierarchy object", fn:generateSketchHierarchy,
-               hint:"The robot arbitrates. Matches the BLE path." },
-  unrolled:  { label:"Unrolled if/else", fn:generateSketchUnrolled,
-               hint:"Every rung written out. For reading in a debrief." }
-};
-
-let sketchStyle = "hierarchy";
 
 function generateSketch(hierarchy, sketchName, profileKey) {
-  return (SKETCH_STYLES[sketchStyle] || SKETCH_STYLES.hierarchy)
-           .fn(hierarchy, sketchName, profileKey);
+  return generateSketchInline(hierarchy, sketchName, profileKey);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -836,7 +735,7 @@ function generateSketch(hierarchy, sketchName, profileKey) {
 // Bumped whenever index.html changes. Shown in the footer and named in the
 // download confirmation — a stale cached page is otherwise indistinguishable
 // from a bug in the bundler.
-const BUILD_ID = "2026-09-14.1503";
+const BUILD_ID = "2026-09-21.1709";
 
 const FIRMWARE_DIR = "firmware/ethology/";
 const DISPLAY_DIR  = "firmware/display/";
@@ -845,7 +744,7 @@ const BLE_DIR      = "firmware/ble/";
 // Files that make up the BLE receiver sketch — scaffolding with no hierarchy
 // baked in. Flash one per robot, then send hierarchies to it from here.
 const BLE_EXTRA_FILES = ["CogBluetooth.h", "CogBluetooth.cpp"];
-const BLE_INO         = "ethology_ble_robot.ino";
+const BLE_INO         = "ethology_robot_firmware.ino";
 
 // Which robot we are talking to. The same choice names the board when you
 // download a receiver sketch AND filters the scan when you send — a mismatch
@@ -1120,7 +1019,7 @@ const els = {
   code:$("code"), status:$("status"),
   add:$("btn-add"), remove:$("btn-remove"), up:$("btn-up"), down:$("btn-down"),
   clear:$("btn-clear"), download:$("btn-download"),
-  ino:$("btn-ino"), copy:$("btn-copy"),
+  copy:$("btn-copy"),
   send:$("btn-send"), ble:$("btn-ble")
 };
 
@@ -1244,14 +1143,15 @@ function validate() {
       msg:`${h.length} behaviors — the robot accepts at most ${MAX_HIERARCHY}. ` +
           `setHierarchy() will reject this hierarchy whole.` };
   }
-  if (displayMode === "hud" && sketchStyle === "unrolled") {
-    return { tone:"warn",
-      msg:"Unrolled style writes the rungs out instead of installing them, so " +
-          "the display can only show status — no rung list or guard dots. " +
-          "Switch to Hierarchy object for the full panel." };
-  }
   const light = needsLight(h) ? " Needs a light source in the arena." : "";
-  return { tone:"ok", msg:`${h.length} behavior${h.length === 1 ? "" : "s"}, cruise last.${light}` };
+  // Full HUD needs an installed hierarchy to report which rung fired, and only
+  // the BLE receiver installs one. Say so rather than let a downloaded folder
+  // show status alone with no explanation.
+  const hud = displayMode === "hud"
+    ? " Full HUD applies to Send over BLE; a downloaded sketch folder shows status only."
+    : "";
+  return { tone:"ok",
+    msg:`${h.length} behavior${h.length === 1 ? "" : "s"}, cruise last.${light}${hud}` };
 }
 
 function render() {
@@ -1265,14 +1165,21 @@ function render() {
   els.down.disabled   = state.hierSel < 0 || state.hierSel >= state.hierarchy.length - 1;
   els.clear.disabled  = !state.hierarchy.length;
   els.download.disabled = !state.hierarchy.length;
-  els.ino.disabled      = !state.hierarchy.length;
   els.copy.disabled     = !state.hierarchy.length;
   els.send.disabled     = !state.hierarchy.length;
-  // The receiver sketch carries no hierarchy, so it is always available.
+  // The receiver carries no hierarchy, so it is always available.
   els.ble.disabled      = false;
+
+  // Tooltips name the selected robot, so the picker and the action visibly
+  // agree. They deliberately say nothing about what a hierarchy should
+  // contain — that is what the students are working out.
+  els.ble.title =
+    `Download this sketch, and upload it to ${robotName()} before "Send over BLE"`;
   els.send.title = bleSupported()
     ? `Send this hierarchy to ${robotName()} over Bluetooth`
     : "Needs Chrome or Edge over https or localhost";
+  els.download.title =
+    "Download the project folder for this hierarchy without using Bluetooth";
 
   if (state.hierarchy.length) {
     els.code.innerHTML = highlight(generateSketch(state.hierarchy, currentName()));
@@ -1344,7 +1251,7 @@ async function downloadFolder() {
     const local = location.protocol === "file:";
     setStatus(local
       ? "Can't read the firmware sources from a local file. Serve the folder over http — python3 -m http.server — or use the hosted page."
-      : `Couldn't load the firmware sources (${err.message}). Sketch only still works.`,
+      : `Couldn't load the firmware sources (${err.message}). Copy code still works.`,
       "warn");
   } finally {
     els.download.disabled = false;
@@ -1391,15 +1298,6 @@ async function sendHierarchy() {
   }
 }
 
-function downloadIno() {
-  if (!state.hierarchy.length) {
-    setStatus("Add at least one behavior first.", "warn");
-    return;
-  }
-  const name = currentName();
-  saveBlob(new Blob([generateSketch(state.hierarchy, name)], { type:"text/plain" }), name);
-  setStatus(`Downloaded ${name}. It needs the firmware sources beside it to compile.`);
-}
 
 async function copyCode() {
   if (!state.hierarchy.length) return;
@@ -1422,7 +1320,6 @@ function clearAll() {
 
 /* ── Wiring ──────────────────────────────────────────────────────────────── */
 
-const STYLE_KEY = "paw.hierarchyBuilder.sketchStyle";
 const BOARD_KEY = "paw.hierarchyBuilder.board";
 
 // Short labels for the picker; the full profile label goes in the sketch header.
@@ -1501,28 +1398,6 @@ function setBoard(key) {
   render();
 }
 
-function buildStylePicker() {
-  const host = document.querySelector(".style-pick");
-  Object.entries(SKETCH_STYLES).forEach(([name, st]) => {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.dataset.style = name;
-    b.textContent = st.label;
-    b.title = st.hint;
-    b.setAttribute("aria-pressed", String(name === sketchStyle));
-    b.addEventListener("click", () => setSketchStyle(name));
-    host.appendChild(b);
-  });
-}
-
-function setSketchStyle(name) {
-  sketchStyle = SKETCH_STYLES[name] ? name : "hierarchy";
-  try { localStorage.setItem(STYLE_KEY, sketchStyle); } catch (e) { /* ignore */ }
-  document.querySelectorAll(".style-pick button").forEach(b =>
-    b.setAttribute("aria-pressed", String(b.dataset.style === sketchStyle)));
-  render();
-}
-
 function buildThemePicker() {
   const host = document.querySelector(".theme-pick");
   Object.entries(THEMES).forEach(([name, t]) => {
@@ -1549,7 +1424,6 @@ els.clear.addEventListener("click", clearAll);
 els.download.addEventListener("click", downloadFolder);
 els.send.addEventListener("click", sendHierarchy);
 els.ble.addEventListener("click", downloadBleReceiver);
-els.ino.addEventListener("click", downloadIno);
 els.copy.addEventListener("click", copyCode);
 
 // Keyboard equivalents of the arrow buttons, and nothing else moves a
@@ -1568,9 +1442,6 @@ document.addEventListener("keydown", ev => {
 
 let saved = "phosphor";
 try { saved = localStorage.getItem(THEME_KEY) || "phosphor"; } catch (e) { /* ignore */ }
-let savedStyle = "hierarchy";
-try { savedStyle = localStorage.getItem(STYLE_KEY) || "hierarchy"; } catch (e) { /* ignore */ }
-sketchStyle = SKETCH_STYLES[savedStyle] ? savedStyle : "hierarchy";
 
 let savedBoard = HARDWARE_PROFILES.default;
 try { savedBoard = localStorage.getItem(BOARD_KEY) || HARDWARE_PROFILES.default; } catch (e) { /* ignore */ }
@@ -1588,7 +1459,6 @@ buildThemePicker();
 buildDisplayPicker();
 buildRobotPicker();
 buildBoardPicker();
-buildStylePicker();
 applyTheme(THEMES[saved] ? saved : "phosphor");
 rebuildPool();
 render();
