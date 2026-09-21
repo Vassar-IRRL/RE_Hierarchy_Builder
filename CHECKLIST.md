@@ -9,13 +9,13 @@ Read this first — the stages below alternate between them.
 | | Where | What it is |
 |---|---|---|
 | **Student sketch** | downloaded from the web app | Standalone. A `HIERARCHY[]` array, `setHierarchy()`, `loop()`. No BLE, no heartbeat LED. Built from `firmware/ethology/` (14 files), **plus `CogDisplay` if you pick the *Giga + Display* board**. |
-| **Robot firmware** | `arduino/ethology_ble_robot/` | Your BLE robot: receives a hierarchy over BLE, heartbeat LED, `CogDisplay`. Open this folder directly in the IDE. |
+| **Robot firmware** | `arduino/ethology_robot_firmware/` | Your BLE robot: receives a hierarchy over BLE, heartbeat LED, `CogDisplay`. Open this folder directly in the IDE. |
 
 `CogBluetooth` and `CogDisplay` are deliberately absent from the student
 download: bundling them would make every student sketch require ArduinoBLE and
 Arduino_GigaDisplay_GFX, neither of which a bare sketch has any use for.
 
-**Stage 1 uses the student sketch. Stages 2–4 use `arduino/ethology_ble_robot/`.
+**Stage 1 uses the student sketch. Stages 2–4 use `arduino/ethology_robot_firmware/`.
 Stage 5 uses both.**
 
 ---
@@ -26,7 +26,9 @@ Stage 5 uses both.**
       **Not** by double-clicking `index.html` — `fetch` has no origin on
       `file://` and the firmware won't load.
 - [ ] Build a hierarchy; confirm the preview updates as you reorder.
-- [ ] Toggle both sketch styles and all four themes; confirm both persist.
+- [ ] Cycle all four themes; confirm the choice persists on reload.
+- [ ] Click a behavior; confirm it is only selected. Only the arrow buttons
+      should move it.
 - [ ] Move cruise off the bottom; confirm the warning and the unrolled
       view's markers.
 - [ ] Download the sketch folder. Unzip. 15 files, `.ino` basename matching
@@ -63,7 +65,7 @@ Uses the folder you downloaded and unzipped in Stage 0.
 
 ## Stage 2 — Robot firmware, classroom build (Giga, no robot, ~20 min)
 
-Different sketch: open `arduino/ethology_ble_robot/ethology_ble_robot.ino`.
+Different sketch: open `arduino/ethology_robot_firmware/ethology_robot_firmware.ino`.
 Everything below lives there, not in the downloaded student sketch.
 
 - [ ] Install **ArduinoBLE**.

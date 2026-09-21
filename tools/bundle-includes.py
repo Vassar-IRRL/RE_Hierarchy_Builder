@@ -4,12 +4,15 @@ root = sys.argv[1].rstrip("/") + "/"
 BASE = ["EthologyRobot","Robot","CogServo","CogAnaDigi","CogProximity","CogLight","CogCollision"]
 eth  = [f"{b}.{e}" for b in BASE for e in ("h","cpp")]
 disp = ["PAWConfig.h","CogDisplay.h","CogDisplay.cpp"]
-ble  = ["CogBluetooth.h","CogBluetooth.cpp","ethology_ble_robot.ino"]
+ble  = ["CogBluetooth.h","CogBluetooth.cpp","ethology_robot_firmware.ino"]
 ok = True
-for name, files in [("hierarchy", eth+disp), ("receiver", eth+disp+ble)]:
+for name, files in [("hierarchy", eth+disp),
+                    ("receiver",  eth+disp+ble)]:
     have = set(files)
     for f in files:
-        d = "firmware/ethology/" if f in eth else "firmware/display/" if f in disp else "firmware/ble/"
+        d = ("firmware/ethology/" if f in eth else
+             "firmware/display/"  if f in disp else
+             "firmware/ble/")
         try:
             src = open(root + d + f).read()
         except FileNotFoundError:

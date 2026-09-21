@@ -5,7 +5,7 @@ the main project. Written to be actioned from inside
 `PAW-Robotics-refactor`, not from the web repo.
 
 Nothing here has been applied to the main tree. The web repo's
-`arduino/ethology_ble_robot/` holds working versions of every firmware fix, so
+`arduino/ethology_robot_firmware/` holds working versions of every firmware fix, so
 the code below can be copied rather than retyped.
 
 **Reference baseline:** the `ethology_ble_robot` firmware as uploaded
@@ -341,7 +341,7 @@ Notes for merging:
 
 ### 3.3 Sketch changes
 
-`ethology_ble_robot.ino`: the config block is replaced by an
+`ethology_robot_firmware.ino`: the config block is replaced by an
 `#include "PAWConfig.h"`, its private `CogDisplay` stub is deleted, and the
 commented-out display block becomes live calls sourced from `snapshot()` and
 `guardMet()` rather than from re-reading Cogs.
@@ -355,8 +355,9 @@ One ordering trap: call `display.setHierarchy(ble.pendingNames(), count)`
 
 ## Part 4 — `games/ethology/codegen.py`
 
-Nothing here has been fixed in the main tree. The web generator does the right
-thing in each case and can be read as the reference.
+Nothing here has been fixed in the main tree. The web app's two generators
+are working references: the downloaded sketch for the unrolled form (4.2, 4.3,
+4.5), and the BLE receiver's install path for the hierarchy-object form (4.1).
 
 ### 4.1 Generated sketches should install a hierarchy, not unroll one
 
@@ -598,7 +599,7 @@ carries a comment saying the others must match.
 |---|---|
 | `EthologyRobot.h` | modified — Parts 1, 2, Appendix |
 | `EthologyRobot.cpp` | modified — Parts 1, 2 |
-| `ethology_ble_robot.ino` | modified — Part 3.3 |
+| `ethology_robot_firmware.ino` | modified — Part 3.3 |
 | `PAWConfig.h` | **new** |
 | `CogDisplay.h` / `.cpp` | **new** |
 | `Robot`, `CogServo`, `CogAnaDigi`, `CogProximity`, `CogLight`, `CogCollision`, `CogBluetooth` | unchanged |

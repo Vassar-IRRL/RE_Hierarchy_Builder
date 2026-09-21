@@ -30,6 +30,34 @@ robot returns `busy`. Power-cycle to send another.
 Chromium only (no Safari, no Firefox), and https or localhost. The download
 path remains the universal fallback.
 
+## Three buttons, two workflows
+
+Left to right is the order you use them in.
+
+| Button | What it does |
+|---|---|
+| **BLE receiver sketch** | Download once per robot and flash it. No hierarchy is baked in. |
+| **Send over BLE** | Sends the current hierarchy to the selected robot. Needs the receiver. |
+| **Download sketch folder** | The current hierarchy as a standalone sketch. No Bluetooth. |
+
+**With Bluetooth:** flash the receiver once, then send as many hierarchies as
+you like without opening the Arduino IDE again. This is the only path with the
+full HUD, because the receiver installs the hierarchy in `EthologyRobot` and
+can report which rung fired.
+
+**Without Bluetooth:** download the sketch folder, open the `.ino`, upload.
+
+The downloaded sketch writes the hierarchy out as if/else rungs directly in
+`loop()`, so the arbitration is on the page: priority *is* the order of the
+branches, and a rung runs only when every rung above it declined. A cruise
+behaviour becomes a bare `else` only when it is last; anywhere else it is
+`if (true)` or `else if (true)`, which compiles and leaves the rungs below it
+visibly unreachable. A cruise-only hierarchy is the lone `if (true)`.
+
+Nothing on the page suggests what a hierarchy *should* contain. The tooltips
+name the selected robot and describe the action, and no more — the robot's
+behaviour is what students are working out.
+
 ## BLE receiver sketch
 
 **BLE receiver sketch** downloads scaffolding with *no hierarchy baked in* —
@@ -41,7 +69,21 @@ and nobody touches the Arduino IDE again.
 
 ## The display setting
 
-**Off** — no display code at all. Compiles without `Arduino_GigaDisplay_GFX`.
+Every download carries `PAWConfig.h` and `CogDisplay.h/.cpp` regardless of the
+setting — the file list never varies, which is what stops a sketch from
+including something the ZIP does not have.
+
+What the setting changes is **use**, not presence. At Off the generated sketch
+has no `#include "CogDisplay.h"`, no `CogDisplay` object and no display calls;
+the files sit in the folder unreferenced. The header comment explains how to
+switch it on later without re-downloading.
+
+The BLE receiver is a fixed file and always includes `CogDisplay.h`. At Off it
+still compiles to nothing: `PAW_USE_DISPLAY 0` makes the class an inline no-op
+stub and puts the whole `.cpp` body inside a guard, so no
+`Arduino_GigaDisplay_GFX` is needed.
+
+**Off** — display code compiles out. Needs no `Arduino_GigaDisplay_GFX`.
 
 **Status** — `RUNNING`, `ADVERTISING`, or `BAD HIERARCHY` if `setHierarchy()`
 rejected a name. The classroom setting: students still infer the hierarchy
@@ -111,21 +153,16 @@ directories beginning with an underscore.
   every download — the generated hierarchy sketch *and* the BLE receiver — by
   stamping `PAW_USE_DISPLAY` and `PAW_DISPLAY_DEV` into each sketch. When it is
   not Off, `CogDisplay.h/.cpp` are added to the ZIP.
-- **Two sketch styles.** *Hierarchy object* (default) declares the ordering as
-  data and calls `bot.setHierarchy()` / `bot.hierarchy()`, letting the robot
-  arbitrate — the same path a BLE-delivered hierarchy takes. *Unrolled
-  if/else* writes every rung out for reading in a debrief. Toggle sits in the
-  preview header; the choice persists.
-- **Download sketch folder** — a ZIP holding the `.ino` plus every firmware
-  source it includes. Unzip, open the `.ino`, compile. Nothing to install.
-- **Sketch only** — the bare `.ino`, for dropping into a folder that already
-  has the sources.
+- **Download sketch folder** — a ZIP holding the inline `.ino` plus every
+  firmware source it includes. Unzip, open the `.ino`, compile. Nothing to
+  install.
 - Copy to clipboard.
 - Four themes, ported from `engine/theme.py`. The choice persists in
   `localStorage`.
 
-Keyboard: `→` and `←` move a selected behavior between columns, `Alt+↑` and
-`Alt+↓` reorder, `Enter` on a focused item moves it.
+Clicking a behavior only selects it. The arrow buttons add, remove and
+reorder; the keyboard equivalents are `→` and `←` between columns and `Alt+↑`
+/ `Alt+↓` to reorder, and they are ignored while a button has focus.
 
 ## Differences from `codegen.py`
 

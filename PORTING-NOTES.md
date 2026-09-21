@@ -22,7 +22,7 @@ in live saved hierarchies?). This one has teeth: `setHierarchy()` rejects a
 hierarchy *whole* on an unknown name, so any file containing them is silently
 unusable.
 
-**Done, but only in `arduino/ethology_ble_robot/`** — items 3, 6, 11, 12, 13,
+**Done, but only in `arduino/ethology_robot_firmware/`** — items 3, 6, 11, 12, 13,
 14, 16, 17, 19. That folder is ahead of the main tree; see the fold-back list
 at the end.
 
@@ -214,7 +214,7 @@ field (`sketch_seed_pin`) so a different board can move it.
 
 ### 11. Hardware findings from bench testing — `done` (in arduino/)
 
-Four fixes applied to `arduino/ethology_ble_robot/`; fold them into the main
+Four fixes applied to `arduino/ethology_robot_firmware/`; fold them into the main
 tree.
 
 **`cruise_arc` was indistinguishable from `cruise_straight`.** It flipped a
@@ -359,7 +359,7 @@ Not upstream, but the matching to-do here.
 - Transports: download and Web Bluetooth both ship. Web Serial over USB is
   still unimplemented — it would work on every board, including ones with no
   radio, and is the obvious next one.
-- **`arduino/ethology_ble_robot/` is ahead of the main tree.** Everything
+- **`arduino/ethology_robot_firmware/` is ahead of the main tree.** Everything
   marked `done` above lives there and nowhere else. What to fold back into
   `firmware/shared/`:
   - `EthologyRobot` — member initialisers, `lastFiredIndex()`,
@@ -369,13 +369,16 @@ Not upstream, but the matching to-do here.
     `leftBackBump` on D8.
   - `CogDisplay.h` / `.cpp` — new files.
   - `PAWConfig.h` — new file, and the reason the build switches work at all.
-  - `ethology_ble_robot.ino` — config block replaced by the `PAWConfig.h`
+  - `ethology_robot_firmware.ino` — config block replaced by the `PAWConfig.h`
     include; its private `CogDisplay` stub deleted, since the header now
     supplies one.
 - Display mode (Off / Status / Full HUD) and robot letter are UI settings
   stamped into `PAWConfig.h` at download time, for both the hierarchy sketch
   and the BLE receiver.
-- Two sketch styles ship: hierarchy-object (default) and unrolled if/else.
+- The downloaded sketch is inline: rungs as if/else in `loop()`, generated
+  from the student's hierarchy. The earlier hierarchy-object style and a
+  fixed-hierarchy "static firmware" download were both removed — the latter
+  because it hard-coded the answer to the exercise.
   The choice persists in `localStorage`. Both were compile-checked with
   `g++ -fsyntax-only -Wall` across valid, cruise-middle, cruise-only and
   all-eight hierarchies.

@@ -17,7 +17,7 @@ index.html                    the entire web app — vanilla JS, no build step
 firmware/ethology/            14 files bundled into every student download
 firmware/display/             CogDisplay + PAWConfig, bundled when display is on
 firmware/ble/                 CogBluetooth + the receiver sketch
-arduino/ethology_ble_robot/   the robot firmware — open THIS in the Arduino IDE
+arduino/ethology_robot_firmware/   the robot firmware — open THIS in the Arduino IDE
 tools/check.sh                verification; tools/stubs/ backs it
 sync-firmware.sh              arduino/ -> firmware/ethology/
 MAIN-PROJECT-REPORT.md        what to change in PAW-Robotics-refactor, with code
@@ -34,17 +34,20 @@ Confusing these wastes time, so check which one is meant.
 
 | | What it is |
 |---|---|
-| **Student sketch** | Downloaded from the web app. A `HIERARCHY[]` array, `setHierarchy()`, `loop()`. No BLE, no heartbeat. |
-| **Robot firmware** | `arduino/ethology_ble_robot/`. Receives hierarchies over BLE, heartbeat LED, `CogDisplay`. |
+| **Student sketch** | Downloaded from the web app. The hierarchy written out as if/else rungs in `loop()`. No BLE, no heartbeat, status-only display. |
+| **Robot firmware** | `arduino/ethology_robot_firmware/`. Receives hierarchies over BLE, heartbeat LED, `CogDisplay`. |
 
 `firmware/ethology/` is a **copy** of the class files from
-`arduino/ethology_ble_robot/`. After changing firmware, run
+`arduino/ethology_robot_firmware/`. After changing firmware, run
 `./sync-firmware.sh arduino` or downloads ship stale sources — and they compile
 cleanly, so nothing warns you.
 
 ---
 
 ## Invariants
+
+**`PAWConfig.h` also owns the LED polarity macro** (`LED_WRITE`), since both
+sketches need it and two copies is this project's recurring failure mode.
 
 **Build switches live in `PAWConfig.h`, never in a `.ino`.** `CogDisplay.cpp`
 is a separate translation unit; a `#define` in the sketch does not reach it, so
@@ -66,6 +69,11 @@ how two separate bugs survived.
 **Never bundle `CogBluetooth` or `CogDisplay` into a student download by
 default.** They would make every download depend on ArduinoBLE and
 Arduino_GigaDisplay_GFX. `CogDisplay` ships only when the display setting is on.
+
+**Nothing in the app may reveal a target hierarchy.** An earlier "static
+firmware" download hard-coded one, which handed students the answer to the
+exercise. Tooltips and messages describe actions, never what a hierarchy
+should contain.
 
 **The classroom display tier shows status only.** Students infer the hierarchy
 from watching the robot; showing the rung list gives away the exercise.
@@ -105,7 +113,7 @@ python3 -m http.server 8000    # then http://localhost:8000
 The main **PAW-Robotics** Python project is separate and not in this repo. It
 holds the desktop builder (`games/ethology/codegen.py`), the simulation, and
 `firmware/shared/`. `PORTING-NOTES.md` lists what needs folding back into it;
-`arduino/ethology_ble_robot/` is currently well ahead of `firmware/shared/`.
+`arduino/ethology_robot_firmware/` is currently well ahead of `firmware/shared/`.
 
 If asked to fix something in `codegen.py`, note that it is not here.
 `MAIN-PROJECT-REPORT.md` describes every change with the code to copy, but

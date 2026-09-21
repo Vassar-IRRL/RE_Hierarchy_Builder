@@ -59,10 +59,32 @@
 #endif
 
 
+// ── Heartbeat LED polarity ───────────────────────────────────────────────────
+// GIGA R1: LED_BUILTIN is one of the on-board RGB LEDs and they are ACTIVE LOW
+// — digitalWrite(pin, LOW) turns it ON. Uno R4 is active HIGH. Getting this
+// wrong does not hide the signal, it inverts it: "solid = running" would read
+// as dark, which is indistinguishable from no power.
+//
+// Auto-detected, but override here if your board is not recognised.
+#ifndef PAW_LED_ACTIVE_LOW
+  #if defined(ARDUINO_GIGA) || defined(ARDUINO_ARCH_MBED_GIGA)
+    #define PAW_LED_ACTIVE_LOW 1
+  #else
+    #define PAW_LED_ACTIVE_LOW 0
+  #endif
+#endif
+
+
 // ── Derived ──────────────────────────────────────────────────────────────────
 // Not settings. Do not edit.
 #define _PAW_STR2(x) #x
 #define _PAW_STR(x)  _PAW_STR2(x)
 #define PAW_ROBOT_NAME ("Robot" _PAW_STR(PAW_ROBOT_ID))
+
+#if PAW_LED_ACTIVE_LOW
+  #define LED_WRITE(on) digitalWrite(LED_BUILTIN, (on) ? LOW : HIGH)
+#else
+  #define LED_WRITE(on) digitalWrite(LED_BUILTIN, (on) ? HIGH : LOW)
+#endif
 
 #endif // PAWCONFIG_H
