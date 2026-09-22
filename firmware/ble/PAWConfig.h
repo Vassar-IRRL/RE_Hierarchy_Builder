@@ -51,6 +51,23 @@
 #endif
 
 
+// ── Light sensor type ────────────────────────────────────────────────────────
+// Which way the RAW analogRead value runs for your light sensors. Two kinds of
+// sensor are in use, and they read opposite ways round:
+//
+// 0 = raw HIGH means DARK.   CogLight maps 0..1023 -> 100..0.
+// 1 = raw HIGH means BRIGHT. CogLight maps 0..1023 -> 0..100.
+//
+// Either way CogLight::getData() reports 0 = dark, 100 = bright, which is what
+// every light behaviour assumes. Set this wrong and the gradient's sign flips,
+// so approach_light flees the lamp and avoid_light chases it.
+//
+// 0 is the default because it is the sensor the light behaviours were tuned on.
+#ifndef PAW_LIGHT_HIGH_IS_BRIGHT
+#define PAW_LIGHT_HIGH_IS_BRIGHT 0
+#endif
+
+
 // ── Bench tracing ────────────────────────────────────────────────────────────
 // One sensor line per tick on the serial port, rate-limited. Independent of
 // the display; useful when there is no shield attached.

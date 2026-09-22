@@ -167,23 +167,27 @@ void EthologyRobot::approachLight() {
 // ================================
 // Struck on the front: ARC BACKWARD, away from the side that was hit.
 //
-// This used to spin in place -- left hit (100, -100), right hit (-100, 100).
-// Those rotation directions were verified on hardware by pressing each bumper,
-// and they remain the reference: whatever an escape does, it must turn the
-// same way they did. Rotating in place changed heading but not position, so
-// the robot could spin clear of the bumper and drive straight back in. An arc
-// backward both reverses away and turns, and the arcs set here were chosen on
-// hardware.
+// This used to spin in place. Spinning changed heading without moving the
+// robot, so it could rotate clear of the bumper and drive straight back in.
+// An arc backward both reverses and turns. Duration is ESCAPE_SECONDS.
 //
-// Duration is ESCAPE_SECONDS, unchanged.
+// VERIFIED ON HARDWARE, and the first attempt was wrong. The arcs were first
+// set as left (-50, -70) / right (-70, -50). On the floor those turned the
+// robot INTO the struck side, and with avoid_object also in the hierarchy the
+// two behaviours fought: escape backed toward the obstacle, avoid steered off
+// it, repeat. Reversing the pairs fixed it.
+//
+// Worth recording why the wrong values looked right. They were checked by
+// comparing the sign of the wheel difference against the old verified spin
+// pairings -- a RELATIVE argument, not first-principles arithmetic -- and that
+// argument still gave the wrong answer. Backing up while turning does not read
+// the same way as spinning in place. So the rule here is absolute: do not
+// derive or "correct" these from any reasoning. Press a bumper and watch.
 //
 // The two tests are EXCLUSIVE. They used to be independent ifs, so a head-on
 // hit closing both bumpers ran one manoeuvre and then the other and they
 // cancelled -- the robot sat still while pinned. A both-sides hit reverses
 // straight out, the only move that clears a square-on obstacle.
-//
-// Do not "correct" wheel signs here from the arithmetic. Press a bumper and
-// watch which way it turns; believe the robot.
 void EthologyRobot::escapeFrontCollision() {
     const bool left  = (_leftFrontBumpData  == 0);
     const bool right = (_rightFrontBumpData == 0);
@@ -192,10 +196,10 @@ void EthologyRobot::escapeFrontCollision() {
         driveProportional(-100, -100, ESCAPE_SECONDS);   // pinned: back straight out
     }
     else if (left) {
-        driveProportional(-50, -70, ESCAPE_SECONDS);
+        driveProportional(-70, -50, ESCAPE_SECONDS);
     }
     else if (right) {
-        driveProportional(-70, -50, ESCAPE_SECONDS);
+        driveProportional(-50, -70, ESCAPE_SECONDS);
     }
 }
 

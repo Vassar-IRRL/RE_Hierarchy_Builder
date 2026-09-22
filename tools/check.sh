@@ -91,7 +91,40 @@ else
     bad "a bundle has an unresolved include"
 fi
 
-# -- 4. The bundled copy matches the sketch ───────────────────────────────────
+# -- 4. Every stamped setting can actually be stamped -------------------------
+# The web app fills PAWConfig.h in by replacing #define lines. If a copy lacks
+# a define, the replace silently finds nothing and the download ships the
+# default — no error anywhere. The list of settings is read from stampConfig()
+# in index.html, so adding a setting there without adding it here fails.
+echo "Config stamping"
+cfg_ok=1
+for f in firmware/display/PAWConfig.h firmware/ble/PAWConfig.h; do
+    if ! cmp -s "$SKETCH/PAWConfig.h" "$ROOT/$f"; then
+        bad "$f differs from the sketch's PAWConfig.h"; cfg_ok=0
+    fi
+done
+STAMPED=$(sed -n '/^function stampConfig/,/^}/p' "$ROOT/index.html" \
+          | grep -o '#define PAW_[A-Z_]*' | awk '{print $2}' | sort -u)
+for d in $STAMPED; do
+    if ! grep -q "^#define $d " "$SKETCH/PAWConfig.h"; then
+        bad "PAWConfig.h has no '#define $d' for the app to stamp"; cfg_ok=0
+    fi
+done
+[[ $cfg_ok -eq 1 ]] && pass "all $(echo "$STAMPED" | wc -w | tr -d ' ') stamped settings present in every PAWConfig.h"
+
+# Both light-sensor directions must compile.
+for v in 0 1; do
+    sed "s/^#define PAW_LIGHT_HIGH_IS_BRIGHT .*/#define PAW_LIGHT_HIGH_IS_BRIGHT $v/" \
+        "$SKETCH/PAWConfig.h" > "$WORK/PAWConfig.h"
+    if (cd "$WORK" && g++ -std=gnu++17 -Wall -I. -c CogLight.cpp -o /dev/null 2>lerr.txt); then
+        pass "CogLight compiles with PAW_LIGHT_HIGH_IS_BRIGHT=$v"
+    else
+        bad "CogLight with PAW_LIGHT_HIGH_IS_BRIGHT=$v"
+        head -3 "$WORK/lerr.txt" | sed 's/^/      /'
+    fi
+done
+
+# -- 5. The bundled copy matches the sketch ───────────────────────────────────
 echo "Firmware sync"
 if bash "$ROOT/sync-firmware.sh" "$ROOT/arduino" >"$WORK/sync.txt" 2>&1; then
     pass "firmware/ethology matches arduino/, manifest agrees"

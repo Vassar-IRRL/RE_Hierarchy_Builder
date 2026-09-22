@@ -59,7 +59,7 @@ done
 # CogDisplay ships from firmware/display/, bundled only by the display profile.
 DISP="$(dirname "$DEST")/display"
 mkdir -p "$DISP"
-for f in CogDisplay.h CogDisplay.cpp; do
+for f in CogDisplay.h CogDisplay.cpp PAWConfig.h; do
     if [[ -f "$SRC/$f" ]]; then
         if [[ ! -f "$DISP/$f" ]] || ! cmp -s "$SRC/$f" "$DISP/$f"; then
             cp "$SRC/$f" "$DISP/$f"
@@ -68,6 +68,18 @@ for f in CogDisplay.h CogDisplay.cpp; do
         fi
     else
         echo "  WARNING: $f not found in source — firmware/display/ may be stale" >&2
+    fi
+done
+
+# firmware/ble/ carries its own PAWConfig.h plus the receiver sketch. A stale
+# PAWConfig.h there is silent: the web app stamps whatever #defines it finds,
+# so a setting missing from the copy simply never reaches the download.
+BLE="$(dirname "$DEST")/ble"
+for f in PAWConfig.h CogBluetooth.h CogBluetooth.cpp ethology_robot_firmware.ino; do
+    if [[ -f "$SRC/$f" ]] && ! cmp -s "$SRC/$f" "$BLE/$f"; then
+        cp "$SRC/$f" "$BLE/$f"
+        echo "  updated  ble/$f"
+        changed=$((changed + 1))
     fi
 done
 

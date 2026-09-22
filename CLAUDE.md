@@ -46,6 +46,16 @@ cleanly, so nothing warns you.
 
 ## Invariants
 
+**Every download's `PAWConfig.h` goes through `stampConfig()` in
+`index.html`.** Settings reach a download only by replacing `#define` lines
+that already exist; a missing define fails silently. `tools/check.sh` reads the
+stamped list from `stampConfig()` and fails if any `PAWConfig.h` copy lacks
+one. Add a setting in both places.
+
+**Light polarity is a sensor property, not a behaviour bug.**
+`PAW_LIGHT_HIGH_IS_BRIGHT` sets which way `CogLight` maps the raw reading. If
+approach and avoid light look swapped, check this before touching behaviours.
+
 **`PAWConfig.h` also owns the LED polarity macro** (`LED_WRITE`), since both
 sketches need it and two copies is this project's recurring failure mode.
 
@@ -80,7 +90,10 @@ from watching the robot; showing the rung list gives away the exercise.
 `PAW_DISPLAY_DEV 0` compiles the HUD out entirely, so a classroom binary cannot
 be talked into revealing it.
 
-**Do not derive motor polarity from wheel arithmetic.** The light behaviours,
+**Do not derive motor polarity from wheel arithmetic — or from comparisons.**
+Comparing a new wheel pair's sign against a hardware-verified pair looks safe
+and is not: it gave the wrong direction for the backward-arc escapes, because
+reversing while turning does not read like spinning in place. The light behaviours,
 `escapeFrontCollision()` and `approachObject()` were each wrong in a way that
 looked correct on paper. Every one was fixed from hardware observation, and the
 comments say so. If a behaviour seems backwards, test it; do not reason it out

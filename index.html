@@ -200,6 +200,10 @@ button.btn.danger:hover:not(:disabled) { border-color:var(--amber); }
 
 .pick-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
 .board-pick { display:flex; gap:0; }
+.pick-lbl {
+  font-size:.62rem; letter-spacing:.1em; color:var(--text-dim);
+  margin-right:-6px;   /* sits snug against the picker it labels */
+}
 .board-pick button {
   font-family:var(--font-body); font-size:.66rem; letter-spacing:.08em;
   text-transform:uppercase; padding:4px 10px; cursor:pointer;
@@ -304,6 +308,10 @@ footer.colophon {
   <section class="preview" aria-labelledby="prev-h">
     <h2 id="prev-h">Generated sketch
       <span class="pick-row">
+        <!-- Hardware settings live together here: which board, and which way
+             the light sensors read. Both are stamped into PAWConfig.h. -->
+        <span class="pick-lbl">LIGHT SENSOR</span>
+        <span class="board-pick light-pick" role="group" aria-label="Light sensor type"></span>
         <span class="board-pick" role="group" aria-label="Target board"></span>
       </span>
     </h2>
@@ -312,7 +320,7 @@ footer.colophon {
 
   <footer class="colophon">
     Behavior wire names must match BEHAVIOR_NAMES in EthologyRobot.cpp
-    <span class="build">build 2026-09-21.1709</span>
+    <span class="build">build 2026-09-21.2204</span>
   </footer>
 </div>
 
@@ -512,6 +520,14 @@ const ROBOT_CONFIG = {
 const DISPLAY_MODES = { off:"Off", status:"Status", hud:"Full HUD" };
 let   displayMode = "off";
 const DISPLAY_KEY = "paw.hierarchyBuilder.display";
+
+// Which way the light sensors' RAW readings run. Two sensor types are in use
+// and they read opposite ways round; CogLight normalises both to 0 = dark,
+// 100 = bright, but only if it is told which one it has. "dark" is the default
+// because it is the sensor the light behaviours were tuned on.
+const LIGHT_MODES = { dark:"High = dark", bright:"High = bright" };
+let   lightMode   = "dark";
+const LIGHT_KEY   = "paw.hierarchyBuilder.light";
 
 const displayOn  = () => displayMode !== "off";
 const displayDev = () => displayMode === "hud";
@@ -735,7 +751,7 @@ function generateSketch(hierarchy, sketchName, profileKey) {
 // Bumped whenever index.html changes. Shown in the footer and named in the
 // download confirmation — a stale cached page is otherwise indistinguishable
 // from a bug in the bundler.
-const BUILD_ID = "2026-09-21.1709";
+const BUILD_ID = "2026-09-21.2204";
 
 const FIRMWARE_DIR = "firmware/ethology/";
 const DISPLAY_DIR  = "firmware/display/";
@@ -854,6 +870,27 @@ function zipStore(entries) {
 }
 
 /**
+ * Fill PAWConfig.h in from the page's settings. EVERY download goes through
+ * this, so the settings cannot reach one bundle and miss another.
+ *
+ * That is not hypothetical. The sketch-folder download used to ship PAWConfig.h
+ * unstamped, so it always said PAW_USE_DISPLAY 0 — choosing Status emitted the
+ * display calls and they compiled to nothing. Only the BLE receiver was being
+ * stamped, by its own private copy of this logic.
+ */
+function stampConfig(text) {
+  return text
+    .replace(/#define PAW_ROBOT_ID .*/,
+             `#define PAW_ROBOT_ID ${activeRobot}`)
+    .replace(/#define PAW_USE_DISPLAY .*/,
+             `#define PAW_USE_DISPLAY ${displayOn() ? 1 : 0}`)
+    .replace(/#define PAW_DISPLAY_DEV .*/,
+             `#define PAW_DISPLAY_DEV ${displayDev() ? 1 : 0}`)
+    .replace(/#define PAW_LIGHT_HIGH_IS_BRIGHT .*/,
+             `#define PAW_LIGHT_HIGH_IS_BRIGHT ${lightMode === "bright" ? 1 : 0}`);
+}
+
+/**
  * Assemble the BLE receiver sketch folder.
  *
  * No hierarchy is baked in: this is the scaffolding that brings up
@@ -899,14 +936,8 @@ async function buildBleZip(stem, robotId) {
     // in the .ino reaches the .ino alone, and the link fails with
     // "undefined reference to CogDisplay::setGuards".
     if (f.name === "PAWConfig.h") {
-      const cfg = dec.decode(f.data)
-        .replace(/#define PAW_ROBOT_ID .*/,
-                 `#define PAW_ROBOT_ID ${robotId}`)
-        .replace(/#define PAW_USE_DISPLAY .*/,
-                 `#define PAW_USE_DISPLAY ${displayOn() ? 1 : 0}`)
-        .replace(/#define PAW_DISPLAY_DEV .*/,
-                 `#define PAW_DISPLAY_DEV ${displayDev() ? 1 : 0}`);
-      return { name:`${stem}/PAWConfig.h`, data:enc.encode(cfg) };
+      return { name:`${stem}/PAWConfig.h`,
+               data:enc.encode(stampConfig(dec.decode(f.data))) };
     }
     if (f.name !== BLE_INO) return { name:`${stem}/${f.name}`, data:f.data };
 
@@ -925,10 +956,13 @@ async function buildBleZip(stem, robotId) {
  */
 async function buildSketchZip(hierarchy, stem) {
   const enc      = new TextEncoder();
+  const dec      = new TextDecoder();
   const firmware = await fetchFirmware();
   const entries  = [
     { name:`${stem}/${stem}.ino`, data:enc.encode(generateSketch(hierarchy, `${stem}.ino`)) },
-    ...firmware.map(f => ({ name:`${stem}/${f.name}`, data:f.data }))
+    ...firmware.map(f => f.name === "PAWConfig.h"
+      ? { name:`${stem}/PAWConfig.h`, data:enc.encode(stampConfig(dec.decode(f.data))) }
+      : { name:`${stem}/${f.name}`,   data:f.data })
   ];
   return zipStore(entries);
 }
@@ -1376,8 +1410,32 @@ function setRobot(id) {
   render();
 }
 
+function buildLightPicker() {
+  const host = document.querySelector(".light-pick");
+  Object.entries(LIGHT_MODES).forEach(([key, label]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.light = key;
+    b.textContent = label;
+    b.title = key === "dark"
+      ? "Raw reading rises as the light gets DIMMER. The sensor the light behaviors were tuned on."
+      : "Raw reading rises as the light gets BRIGHTER.";
+    b.setAttribute("aria-pressed", String(key === lightMode));
+    b.addEventListener("click", () => setLightMode(key));
+    host.appendChild(b);
+  });
+}
+
+function setLightMode(key) {
+  lightMode = LIGHT_MODES[key] ? key : "dark";
+  try { localStorage.setItem(LIGHT_KEY, lightMode); } catch (e) { /* ignore */ }
+  document.querySelectorAll(".light-pick button").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.light === lightMode)));
+  render();
+}
+
 function buildBoardPicker() {
-  const host = document.querySelector(".board-pick");
+  const host = document.querySelector(".board-pick:not(.light-pick)");
   Object.keys(HARDWARE_PROFILES.profiles).forEach(key => {
     const b = document.createElement("button");
     b.type = "button";
@@ -1458,6 +1516,10 @@ displayMode = DISPLAY_MODES[savedDisplay] ? savedDisplay : "off";
 buildThemePicker();
 buildDisplayPicker();
 buildRobotPicker();
+let savedLight = "dark";
+try { savedLight = localStorage.getItem(LIGHT_KEY) || "dark"; } catch (e) { /* ignore */ }
+lightMode = LIGHT_MODES[savedLight] ? savedLight : "dark";
+buildLightPicker();
 buildBoardPicker();
 applyTheme(THEMES[saved] ? saved : "phosphor");
 rebuildPool();

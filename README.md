@@ -67,6 +67,17 @@ and nobody touches the Arduino IDE again.
 
 19 files. The only per-robot difference is `PAW_ROBOT_ID`, set from the picker.
 
+## Light sensor setting
+
+Beside the board picker in the Generated Sketch header: **High = dark** or
+**High = bright**, describing which way the sensor's *raw* reading runs. Two
+sensor types are in use and they read opposite ways round.
+
+It is stamped into `PAWConfig.h` as `PAW_LIGHT_HIGH_IS_BRIGHT`, and `CogLight`
+uses it to normalise either sensor to 0 = dark, 100 = bright — which every
+light behaviour assumes. Pick the wrong one and approach and avoid swap places.
+**High = dark** is the default: it is the sensor the behaviours were tuned on.
+
 ## The display setting
 
 Every download carries `PAWConfig.h` and `CogDisplay.h/.cpp` regardless of the
