@@ -6,6 +6,19 @@ Changelog (keepachangelog.com); version numbers follow the rules in
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-09-22
+
+### Changed
+
+- Escape duration 0.8 s → 1.2 s.
+- Front collision arcs widened: left `(-40, -80)`, right `(-80, -40)`, for a
+  tighter turn out of the obstacle.
+- A head-on hit that pins both bumpers now spins for twice the escape
+  duration instead of reversing straight out, which left the robot facing the
+  obstacle and driving back into it.
+
+Tuning only — nothing already flashed or downloaded stops working, so PATCH.
+
 ## [1.0.0] — 2026-09-21
 
 First versioned release. Everything before this point is folded in here.
