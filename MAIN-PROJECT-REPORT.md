@@ -10,9 +10,9 @@ the code below can be copied rather than retyped.
 
 **Reference baseline:** the `ethology_ble_robot` firmware as uploaded
 2026-08-27. Against it, `Robot`, `CogServo`, `CogAnaDigi`, `CogProximity`,
-`CogLight`, `CogCollision` and `CogBluetooth` are **unchanged**. All firmware
-changes are confined to `EthologyRobot.{h,cpp}`, the sketch, and three new
-files.
+`CogCollision` and `CogBluetooth` are **unchanged**. All firmware
+changes are confined to `EthologyRobot.{h,cpp}`, `CogLight.{h,cpp}`, the
+sketch, and three new files.
 
 ## Relationship to `PORTING-NOTES.md`
 
@@ -214,7 +214,7 @@ threshold is ever raised.
 
 ### 1.10 Tuning from hardware, and escapes that arc backward
 
-**Constants.** `LIGHT_THRESHOLD` 15 → 20, `CRUISE_SPEED` 60 → 80, arc
+**Constants.** `LIGHT_THRESHOLD` 15 → 20 → 25, `CRUISE_SPEED` 60 → 80, arc
 30/50 → 50/70. The arc keeps a fixed 20-point wheel difference below cruise, so
 its radius grows only with the speed sum — about 0.16 m → 0.24 m by the
 header's own figures, well short of the 0.52 m the header warns about.
@@ -228,14 +228,51 @@ duration unchanged. Spinning changed heading without moving the robot, so it
 could rotate clear and drive straight back in.
 
 ```cpp
-else if (left)  { driveProportional(-50, -70, ESCAPE_SECONDS); }
-else if (right) { driveProportional(-70, -50, ESCAPE_SECONDS); }
+else if (left)  { driveProportional(-70, -50, ESCAPE_SECONDS); }
+else if (right) { driveProportional(-50, -70, ESCAPE_SECONDS); }
 ```
 
-The two are exact mirrors, and each turns the same way as the hardware-verified
-spin it replaces. An intermediate draft had `(-50, 70)` for the left hit — a
-typo, confirmed by the author — which would have driven forward and turned
-toward the obstacle.
+**Verified on hardware — and the first values were wrong.** They were
+initially set the other way round. On the floor that turned the robot *into*
+the struck side, and with `avoid_object` in the same hierarchy the two fought:
+the escape backed toward the obstacle, avoidance steered off it, repeat.
+
+The wrong values had been checked by comparing wheel-difference signs against
+the old hardware-verified spin pairings. That is a relative argument, not
+first-principles arithmetic, and it still gave the wrong answer — backing up
+while turning does not read like spinning in place. So the rule for this
+codebase is absolute: no reasoning, relative or otherwise, substitutes for
+pressing a bumper.
+
+---
+
+### 1.11 Two light-sensor types read opposite ways round
+
+Two kinds of light sensor are in use. On one, the raw `analogRead` value rises
+as light gets dimmer; on the other it rises as light gets brighter.
+`CogLight::getData()` hard-coded `map(raw, 0, 1023, 100, 0)` — correct only for
+the first.
+
+Every light behaviour assumes `getData()` means 0 = dark, 100 = bright. On the
+wrong sensor the gradient's sign flips, so `approach_light` flees the lamp and
+`avoid_light` chases it — which looks exactly like a behaviour bug and invites
+someone to "fix" the behaviours instead of the mapping.
+
+New define in `PAWConfig.h`, which `CogLight.cpp` now includes:
+
+```cpp
+// 0 = raw HIGH means DARK   -> map(raw, 0, 1023, 100, 0)   (default)
+// 1 = raw HIGH means BRIGHT -> map(raw, 0, 1023, 0, 100)
+#define PAW_LIGHT_HIGH_IS_BRIGHT 0
+```
+
+The default reproduces the old behaviour exactly, since it is the sensor the
+light behaviours were tuned on. Verified by driving `CogLight` from a
+controllable `analogRead`: at 0, raw 0 → 100 and raw 1023 → 0; at 1, the
+reverse.
+
+It must be a header, for the same reason as item 3.1: `CogLight.cpp` is its own
+translation unit and would never see a define placed in the sketch.
 
 ---
 
@@ -584,7 +621,7 @@ carries a comment saying the others must match.
 | Constant | Value | Why |
 |---|---|---|
 | `ESCAPE_SECONDS` | `0.8` | Both escapes; 0.1 was imperceptible (1.5) |
-| `LIGHT_THRESHOLD` | `20` (was 15) | 15 fired weakly on hardware (1.10) |
+| `LIGHT_THRESHOLD` | `25` (was 15) | Raised in steps on hardware (1.10) |
 | `CRUISE_SPEED` | `80` (was 60) | Reads better; stronger collisions (1.10) |
 | `ARC_INNER_SPEED` | `50` (was 30) | Set on hardware (1.10) |
 | `ARC_OUTER_SPEED` | `70` (was 50) | Set on hardware (1.10) |
@@ -633,4 +670,5 @@ carries a comment saying the others must match.
 | `ethology_robot_firmware.ino` | modified — Part 3.3 |
 | `PAWConfig.h` | **new** |
 | `CogDisplay.h` / `.cpp` | **new** |
-| `Robot`, `CogServo`, `CogAnaDigi`, `CogProximity`, `CogLight`, `CogCollision`, `CogBluetooth` | unchanged |
+| `CogLight.h` / `.cpp` | modified — 1.11 |
+| `Robot`, `CogServo`, `CogAnaDigi`, `CogProximity`, `CogCollision`, `CogBluetooth` | unchanged |

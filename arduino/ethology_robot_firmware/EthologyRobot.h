@@ -97,7 +97,9 @@ public:
     // actually using, fix the mapping first, then choose the threshold.
     static constexpr int PROX_THRESHOLD  = 35;
     // LIGHT_THRESHOLD is in CogLight units (0-100 after mapping), applied to
-    // |right - left|. Raised from 15 on hardware: 15 fired weakly.
+    // |right - left|. Raised on hardware, 15 -> 20 -> 25: each step made the
+    // light behaviours more decisive without making them fire in even room
+    // light.
     //
     // The value is deliberately absolute, not normalised. Sensitivity then
     // depends on geometry -- sensors splayed outward or spaced farther apart
@@ -105,7 +107,7 @@ public:
     // so different robots respond differently to the same lamp, which is part
     // of what students observe. Tune it by sweeping a lamp at a typical
     // distance and reading LIGHT GRAD on the Full HUD or PAW_SENSOR_TRACE.
-    static constexpr int LIGHT_THRESHOLD = 20;
+    static constexpr int LIGHT_THRESHOLD = 25;
     static constexpr int COLL_THRESHOLD  = 1;
 
     // ================================

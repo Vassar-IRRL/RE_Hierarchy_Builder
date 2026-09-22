@@ -13,7 +13,9 @@ public:
     // Read raw sensor value via base class, mirror to subclass _rawData
     int getRawData();
 
-    // Map raw [0..1023] to [0..100] and return
+    // Map raw [0..1023] to [0..100], 0 = dark and 100 = bright. Which end of
+    // the raw range is bright depends on the sensor: PAW_LIGHT_HIGH_IS_BRIGHT
+    // in PAWConfig.h.
     int getData();
     // Return the LAST value computed by getData() WITHOUT taking a new
     // sample. Use this when you need the exact reading a prior getData()

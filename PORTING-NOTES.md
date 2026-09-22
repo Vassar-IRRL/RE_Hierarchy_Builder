@@ -350,6 +350,32 @@ came up as `RobotA`.
 
 ## Web-side follow-ups
 
+### Fixed: sketch-folder downloads shipped PAWConfig.h unstamped
+
+Only the BLE receiver filled `PAWConfig.h` in; the sketch-folder download
+shipped the defaults, so Display: Status produced display calls that compiled
+to nothing. All downloads now go through one `stampConfig()`. Related:
+`sync-firmware.sh` never copied `PAWConfig.h` into `firmware/display/` or
+`firmware/ble/`, so a new setting would have been missing from both bundles.
+Both fixed, and `tools/check.sh` now guards the pair.
+
+### Open: Send over BLE won't pair on a Mac — reported, not yet investigated
+
+Tried in Chrome, Firefox and Safari on macOS; none pair. Everything else works.
+
+Firefox and Safari are expected to fail: neither implements Web Bluetooth at
+all. The app should detect that and say so plainly instead of attempting a
+connection — currently the only hint is the Send button's tooltip.
+
+Chrome on macOS is the real question. Leading suspect: macOS requires Chrome to
+be granted Bluetooth access under System Settings → Privacy & Security →
+Bluetooth, and without it the device chooser comes up empty rather than
+showing an error. Check that first. Also worth confirming the robot is
+advertising (Serial Monitor shows the name `CogBluetooth::begin()` came up
+with) and that the robot letter in the header matches the flashed
+`PAW_ROBOT_ID`, since the scan filters on the exact name.
+
+
 Not upstream, but the matching to-do here.
 
 - `FIRMWARE_FILES` in `index.html` is a hand-maintained list. Adding a class
