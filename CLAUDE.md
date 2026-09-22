@@ -20,6 +20,8 @@ firmware/ble/                 CogBluetooth + the receiver sketch
 arduino/ethology_robot_firmware/   the robot firmware — open THIS in the Arduino IDE
 tools/check.sh                verification; tools/stubs/ backs it
 sync-firmware.sh              arduino/ -> firmware/ethology/
+VERSIONING.md                 when to bump MAJOR / MINOR / PATCH
+CHANGELOG.md                  what changed in each release
 MAIN-PROJECT-REPORT.md        what to change in PAW-Robotics-refactor, with code
 PORTING-NOTES.md              running log, 19 items; "At a glance" first
 CHECKLIST.md                  hardware bring-up, staged
@@ -43,6 +45,18 @@ Confusing these wastes time, so check which one is meant.
 cleanly, so nothing warns you.
 
 ---
+
+## Versioning
+
+Every change that ships gets a version bump and a `CHANGELOG.md` entry. Read
+`VERSIONING.md`; the short rule is **MAJOR if anything already flashed,
+downloaded or installed stops working** — a BLE protocol change, a renamed
+wire name or `PAWConfig.h` setting, a newly required library, moved pins.
+MINOR adds something without breaking anything. PATCH is fixes and tuning.
+When unsure, take the higher one.
+
+The number lives only in `APP_VERSION` in `index.html`. Also update `BUILD_ID`
+there on every edit, which is for cache-busting and is not a version.
 
 ## Invariants
 
