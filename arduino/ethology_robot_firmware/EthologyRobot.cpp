@@ -172,10 +172,11 @@ void EthologyRobot::approachLight() {
 // An arc backward both reverses and turns. Duration is ESCAPE_SECONDS.
 //
 // VERIFIED ON HARDWARE, and the first attempt was wrong. The arcs were first
-// set as left (-50, -70) / right (-70, -50). On the floor those turned the
-// robot INTO the struck side, and with avoid_object also in the hierarchy the
-// two behaviours fought: escape backed toward the obstacle, avoid steered off
-// it, repeat. Reversing the pairs fixed it.
+// set the other way round. On the floor those turned the robot INTO the struck
+// side, and with avoid_object also in the hierarchy the two behaviours fought:
+// escape backed toward the obstacle, avoid steered off it, repeat. Reversing
+// the pairs fixed it; the values were then widened to -40/-80 for a tighter
+// turn out.
 //
 // Worth recording why the wrong values looked right. They were checked by
 // comparing the sign of the wheel difference against the old verified spin
@@ -193,13 +194,15 @@ void EthologyRobot::escapeFrontCollision() {
     const bool right = (_rightFrontBumpData == 0);
 
     if (left && right) {
-        driveProportional(-100, -100, ESCAPE_SECONDS);   // pinned: back straight out
+        // Pinned square-on: spin, for twice as long. Reversing straight out
+        // kept the robot facing the obstacle, so it drove back into it.
+        driveProportional(-100, 100, ESCAPE_SECONDS * 2);
     }
     else if (left) {
-        driveProportional(-70, -50, ESCAPE_SECONDS);
+        driveProportional(-40, -80, ESCAPE_SECONDS);
     }
     else if (right) {
-        driveProportional(-50, -70, ESCAPE_SECONDS);
+        driveProportional(-80, -40, ESCAPE_SECONDS);
     }
 }
 

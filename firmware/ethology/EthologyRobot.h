@@ -154,8 +154,10 @@ public:
     // blip, so the behaviour looked broken when it was merely brief.
     //
     // Long enough to clear an obstacle, short enough that the hierarchy stays
-    // responsive. Both escapes use it so they are equally legible.
-    static constexpr float ESCAPE_SECONDS = 0.8;
+    // responsive. Raised 0.8 -> 1.2 on hardware. Both escapes use it so they
+    // are equally legible; a head-on hit that pins both bumpers runs twice
+    // this, since turning out of a square-on obstacle takes longer.
+    static constexpr float ESCAPE_SECONDS = 1.2;
 
     static constexpr unsigned long ARC_HOLD_MIN_MS = 700;
     static constexpr unsigned long ARC_HOLD_MAX_MS = 1900;

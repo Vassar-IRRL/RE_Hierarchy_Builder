@@ -228,9 +228,13 @@ duration unchanged. Spinning changed heading without moving the robot, so it
 could rotate clear and drive straight back in.
 
 ```cpp
-else if (left)  { driveProportional(-70, -50, ESCAPE_SECONDS); }
-else if (right) { driveProportional(-50, -70, ESCAPE_SECONDS); }
+if (left && right) { driveProportional(-100, 100, ESCAPE_SECONDS * 2); }
+else if (left)     { driveProportional( -40, -80, ESCAPE_SECONDS); }
+else if (right)    { driveProportional( -80, -40, ESCAPE_SECONDS); }
 ```
+
+A head-on hit that pins both bumpers spins rather than reversing straight out:
+reversing left the robot still facing the obstacle, so it drove back into it.
 
 **Verified on hardware — and the first values were wrong.** They were
 initially set the other way round. On the floor that turned the robot *into*
@@ -620,7 +624,7 @@ carries a comment saying the others must match.
 
 | Constant | Value | Why |
 |---|---|---|
-| `ESCAPE_SECONDS` | `0.8` | Both escapes; 0.1 was imperceptible (1.5) |
+| `ESCAPE_SECONDS` | `1.2` | Both escapes; 0.1 was imperceptible (1.5) |
 | `LIGHT_THRESHOLD` | `25` (was 15) | Raised in steps on hardware (1.10) |
 | `CRUISE_SPEED` | `80` (was 60) | Reads better; stronger collisions (1.10) |
 | `ARC_INNER_SPEED` | `50` (was 30) | Set on hardware (1.10) |
