@@ -123,6 +123,17 @@ battery, and that is the most common way to lose a lab period.
 rungs out rather than installing them, so `bot.hierarchy()` is never called and
 `lastFiredIndex()` would always be -1. The app warns when the two are paired.
 
+## Versions
+
+The header shows the release, `v1.0.0`. It follows Semantic Versioning, with
+the rules for this project in [`VERSIONING.md`](VERSIONING.md) and the history
+in [`CHANGELOG.md`](CHANGELOG.md).
+
+The same number is written into every generated sketch's header comment and
+into `PAW_BUILDER_VERSION` in each downloaded `PAWConfig.h`. The BLE receiver
+prints it on the serial port at boot, so a robot's firmware can always be
+traced to the release that built it.
+
 ## Keeping the firmware current
 
 `firmware/ethology/` is a copy. The main PAW-Robotics tree's

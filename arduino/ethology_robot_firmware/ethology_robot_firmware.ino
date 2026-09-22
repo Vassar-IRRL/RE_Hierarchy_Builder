@@ -228,6 +228,12 @@ static bool tryInstallHierarchy() {
 void setup()
 {
     Serial.begin(9600);
+
+    // Say which release built this, before anything that can fail. After a
+    // MAJOR release an old receiver may not understand a new builder, and this
+    // line is how you find out which one you have.
+    Serial.print("Hierarchy Builder version: ");
+    Serial.println(PAW_BUILDER_VERSION);   // "unversioned" = not a download
     bot.begin(LEFT_SERVO_PIN, RIGHT_SERVO_PIN);
     display.begin();
 

@@ -92,6 +92,17 @@
 #endif
 
 
+// ── Provenance ───────────────────────────────────────────────────────────────
+// The Hierarchy Builder release that produced this file. Stamped at download
+// time; "unversioned" means it came straight from the repo, not a download.
+// Printed on the serial port at boot, so a robot can always be traced back to
+// the release that built its firmware — which matters most after a MAJOR
+// release, when an old receiver may no longer talk to a new builder.
+#ifndef PAW_BUILDER_VERSION
+#define PAW_BUILDER_VERSION "unversioned"
+#endif
+
+
 // ── Derived ──────────────────────────────────────────────────────────────────
 // Not settings. Do not edit.
 #define _PAW_STR2(x) #x
